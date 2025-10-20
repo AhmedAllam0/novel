@@ -1,0 +1,174 @@
+{
+  "name": "💭 Book Quotes Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "book-quotes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "quote-001-webhook",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "book-quotes-webhook-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "bookName",
+              "value": "={{ $json.bookName || $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "authorName",
+              "value": "={{ $json.author || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "quotesCount",
+              "value": "={{ $json.count || 5 }}",
+              "type": "number"
+            },
+            {
+              "id": "4",
+              "name": "theme",
+              "value": "={{ $json.theme || 'general' }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "quote-002-extract",
+      "name": "Extract Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "model": "mistral-large-latest",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 1500
+        }
+      },
+      "id": "quote-003-model",
+      "name": "Mistral AI",
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [480, 160],
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "8RlFJeQEIK1RW3KX",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=استخرج {{ $('Extract Input').item.json.quotesCount }} اقتباسات مميزة من كتاب \"{{ $('Extract Input').item.json.bookName }}\"{{ $('Extract Input').item.json.authorName ? ' للمؤلف ' + $('Extract Input').item.json.authorName : '' }}\n\n{{ $('Extract Input').item.json.theme !== 'general' ? 'التركيز على موضوع: ' + $('Extract Input').item.json.theme : '' }}\n\nقدم الاقتباسات بالتنسيق التالي (استخدم HTML فقط):\n\n💭 <b>اقتباسات من {{ $('Extract Input').item.json.bookName }}</b>\n\n1️⃣ <i>\"[الاقتباس الأول]\"</i>\n📍 السياق: [وصف مختصر للسياق أو الموضوع]\n\n2️⃣ <i>\"[الاقتباس الثاني]\"</i>\n📍 السياق: [وصف مختصر للسياق أو الموضوع]\n\n3️⃣ ...\n\nمتطلبات الاقتباسات:\n- اختر اقتباسات معبرة وذات معنى عميق\n- نوّع المواضيع (حكمة، حب، حياة، فلسفة، إلخ)\n- اجعلها قصيرة ومؤثرة (1-3 أسطر)\n- اذكر السياق لفهم أفضل",
+        "options": {
+          "systemMessage": "أنت خبير في الأدب والاقتباسات. مهمتك:\n\n1. استخراج أفضل الاقتباسات من الكتب\n2. اختيار اقتباسات ذات معنى عميق\n3. توفير السياق المناسب\n4. التنويع في المواضيع\n\nاختر اقتباسات:\n- معبرة وقوية\n- سهلة الفهم\n- قابلة للمشاركة\n- ملهمة أو محفزة للتفكير\n\nاستخدم HTML للتنسيق فقط."
+        }
+      },
+      "id": "quote-004-chain",
+      "name": "Extract Quotes",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format quotes\nconst inputData = $input.first().json;\nconst bookName = $('Extract Input').item.json.bookName;\nconst author = $('Extract Input').item.json.authorName;\n\nlet responseText = inputData.response || inputData.output || inputData.text || '❌ فشل استخراج الاقتباسات';\n\n// Convert Markdown to HTML\nresponseText = responseText.replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>');\nresponseText = responseText.replace(/(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)/g, '<i>$1</i>');\nresponseText = responseText.replace(/__(.+?)__/g, '<b>$1</b>');\n\n// Extract quotes as structured data\nconst quotes = [];\nconst quotePattern = /\\d+[️⃣\\)\\.]\\s*<i>\"(.+?)\"<\\/i>[\\s\\S]*?📍\\s*السياق:\\s*(.+?)(?=\\n\\d+[️⃣\\)\\.]|\\n\\n|$)/g;\n\nlet match;\nwhile ((match = quotePattern.exec(responseText)) !== null) {\n  quotes.push({\n    text: match[1].trim(),\n    context: match[2].trim().replace(/<[^>]*>/g, '')\n  });\n}\n\n// Add share button prompt\nresponseText += '\\n\\n━━━━━━━━━━━━━━━━\\n📤 <i>شارك اقتباساتك المفضلة مع الأصدقاء!</i>';\n\nreturn [{\n  json: {\n    text: responseText,\n    parse_mode: 'HTML',\n    bookName: bookName,\n    author: author || 'مؤلف غير محدد',\n    quotes: quotes,\n    count: quotes.length\n  }\n}];"
+      },
+      "id": "quote-005-format",
+      "name": "Format Quotes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "quote-006-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Quotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral AI": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Quotes",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Quotes": {
+      "main": [
+        [
+          {
+            "node": "Format Quotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Quotes": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
