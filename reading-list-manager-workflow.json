@@ -1,0 +1,212 @@
+{
+  "name": "📝 Reading List Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reading-list",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "rl-001-webhook",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "reading-list-webhook-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "action",
+              "value": "={{ $json.action || 'list' }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "userId",
+              "value": "={{ $json.userId || $json.sessionId }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "bookData",
+              "value": "={{ $json.book || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "4",
+              "name": "listType",
+              "value": "={{ $json.listType || 'to_read' }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "rl-002-extract",
+      "name": "Extract Action",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "add",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "add",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "rl-003-switch",
+      "name": "Switch Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Add book to reading list\nconst userId = $('Extract Action').item.json.userId;\nconst bookData = $('Extract Action').item.json.bookData;\nconst listType = $('Extract Action').item.json.listType;\n\n// In production, this would connect to a database\n// For now, we'll simulate with in-memory storage\nconst readingLists = global.readingLists || {};\n\nif (!readingLists[userId]) {\n  readingLists[userId] = {\n    to_read: [],\n    reading: [],\n    completed: []\n  };\n}\n\n// Add book to specified list\nconst book = {\n  title: bookData.title || 'كتاب بدون عنوان',\n  author: bookData.author || 'مؤلف غير معروف',\n  addedDate: new Date().toISOString(),\n  status: listType\n};\n\nreadingLists[userId][listType].push(book);\nglobal.readingLists = readingLists;\n\nreturn [{\n  json: {\n    success: true,\n    message: `✅ تمت إضافة \"${book.title}\" إلى قائمة ${getListName(listType)}`,\n    book: book,\n    totalInList: readingLists[userId][listType].length\n  }\n}];\n\nfunction getListName(type) {\n  const names = {\n    to_read: 'الكتب المراد قراءتها',\n    reading: 'الكتب قيد القراءة',\n    completed: 'الكتب المكتملة'\n  };\n  return names[type] || type;\n}"
+      },
+      "id": "rl-004-add",
+      "name": "Add to List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, -100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get user's reading list\nconst userId = $('Extract Action').item.json.userId;\nconst listType = $('Extract Action').item.json.listType;\n\nconst readingLists = global.readingLists || {};\nconst userLists = readingLists[userId] || {\n  to_read: [],\n  reading: [],\n  completed: []\n};\n\nlet responseText = '📚 <b>قائمة القراءة الخاصة بك</b>\\n\\n';\n\nif (listType === 'all') {\n  // Show all lists\n  responseText += formatList('📖 للقراءة', userLists.to_read);\n  responseText += formatList('📘 قيد القراءة', userLists.reading);\n  responseText += formatList('✅ مكتملة', userLists.completed);\n} else {\n  // Show specific list\n  const listName = getListName(listType);\n  responseText += formatList(listName, userLists[listType] || []);\n}\n\nif (userLists.to_read.length === 0 && userLists.reading.length === 0 && userLists.completed.length === 0) {\n  responseText = '📚 قائمتك فارغة حالياً\\n\\n💡 ابدأ بإضافة كتب إلى قائمتك!';\n}\n\nfunction formatList(title, books) {\n  if (!books || books.length === 0) return '';\n  \n  let text = `<b>${title}</b> (${books.length})\\n`;\n  books.forEach((book, idx) => {\n    text += `${idx + 1}. <i>${book.title}</i> - ${book.author}\\n`;\n  });\n  text += '\\n';\n  return text;\n}\n\nfunction getListName(type) {\n  const names = {\n    to_read: '📖 للقراءة',\n    reading: '📘 قيد القراءة',\n    completed: '✅ مكتملة'\n  };\n  return names[type] || type;\n}\n\nreturn [{\n  json: {\n    text: responseText,\n    parse_mode: 'HTML',\n    lists: userLists,\n    totalBooks: userLists.to_read.length + userLists.reading.length + userLists.completed.length\n  }\n}];"
+      },
+      "id": "rl-005-list",
+      "name": "Get List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Remove book from list\nconst userId = $('Extract Action').item.json.userId;\nconst bookData = $('Extract Action').item.json.bookData;\nconst listType = $('Extract Action').item.json.listType;\n\nconst readingLists = global.readingLists || {};\n\nif (!readingLists[userId] || !readingLists[userId][listType]) {\n  return [{\n    json: {\n      success: false,\n      message: '❌ القائمة فارغة أو غير موجودة'\n    }\n  }];\n}\n\nconst bookTitle = bookData.title;\nconst initialLength = readingLists[userId][listType].length;\n\n// Remove book\nreadingLists[userId][listType] = readingLists[userId][listType].filter(\n  book => book.title !== bookTitle\n);\n\nglobal.readingLists = readingLists;\n\nconst removed = initialLength > readingLists[userId][listType].length;\n\nreturn [{\n  json: {\n    success: removed,\n    message: removed \n      ? `✅ تم حذف \"${bookTitle}\" من القائمة`\n      : `⚠️ لم يتم العثور على \"${bookTitle}\" في القائمة`,\n    remainingBooks: readingLists[userId][listType].length\n  }\n}];"
+      },
+      "id": "rl-006-remove",
+      "name": "Remove from List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "rl-007-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Action": {
+      "main": [
+        [
+          {
+            "node": "Switch Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Action": {
+      "main": [
+        [
+          {
+            "node": "Add to List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Remove from List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to List": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get List": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove from List": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

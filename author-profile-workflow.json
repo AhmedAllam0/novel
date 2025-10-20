@@ -1,0 +1,168 @@
+{
+  "name": "✍️ Author Profile & Works",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "author-profile",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "auth-001-webhook",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "author-profile-webhook-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "authorName",
+              "value": "={{ $json.author || $json.authorName || $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "includeBooks",
+              "value": "={{ $json.includeBooks !== false }}",
+              "type": "boolean"
+            },
+            {
+              "id": "3",
+              "name": "language",
+              "value": "={{ $json.language || 'ar' }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "auth-002-extract",
+      "name": "Extract Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "model": "mistral-large-latest",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2500
+        }
+      },
+      "id": "auth-003-model",
+      "name": "Mistral AI",
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [480, 160],
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "8RlFJeQEIK1RW3KX",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=قدم ملفاً شاملاً عن المؤلف \"{{ $('Extract Input').item.json.authorName }}\"\n\nالتنسيق المطلوب (استخدم HTML فقط):\n\n✍️ <b>{{ $('Extract Input').item.json.authorName }}</b>\n\n👤 <b>نبذة عن المؤلف:</b>\n[فقرة 4-5 أسطر عن حياة المؤلف وأهميته الأدبية]\n\n🎂 <b>معلومات أساسية:</b>\n📅 تاريخ الميلاد: [التاريخ]\n🌍 الجنسية: [البلد]\n🎓 التعليم: [المؤهلات]\n🏆 الجوائز: [أبرز الجوائز]\n\n✨ <b>الأسلوب الأدبي:</b>\n[وصف أسلوب الكتابة والمواضيع المفضلة]\n\n📚 <b>أشهر الأعمال:</b>\n1. <i>[اسم الكتاب الأول]</i> ([السنة]) - [جملة وصفية]\n2. <i>[اسم الكتاب الثاني]</i> ([السنة]) - [جملة وصفية]\n3. <i>[اسم الكتاب الثالث]</i> ([السنة]) - [جملة وصفية]\n4. <i>[اسم الكتاب الرابع]</i> ([السنة]) - [جملة وصفية]\n5. <i>[اسم الكتاب الخامس]</i> ([السنة]) - [جملة وصفية]\n\n🎯 <b>المواضيع الرئيسية:</b>\n• [موضوع 1]\n• [موضوع 2]\n• [موضوع 3]\n\n💭 <b>اقتباس مميز:</b>\n<i>\"[اقتباس شهير للمؤلف]\"</i>\n\n📖 <b>مقترحات للقراءة:</b>\nابدأ بـ: <i>[الكتاب الأنسب للمبتدئين]</i>",
+        "options": {
+          "systemMessage": "أنت خبير في الأدب والكتّاب. مهمتك تقديم معلومات شاملة ودقيقة عن المؤلفين:\n\n1. السيرة الذاتية المختصرة\n2. أهم الأعمال والإنجازات\n3. الأسلوب الأدبي والمواضيع\n4. التأثير الأدبي والثقافي\n5. توصيات للقراء الجدد\n\nكن:\n- دقيقاً في المعلومات\n- شاملاً لكن مختصراً\n- موضوعياً في التقييم\n- ملهماً في الوصف\n\nاستخدم HTML للتنسيق فقط."
+        }
+      },
+      "id": "auth-004-chain",
+      "name": "Generate Profile",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format author profile\nconst inputData = $input.first().json;\nconst authorName = $('Extract Input').item.json.authorName;\n\nlet responseText = inputData.response || inputData.output || inputData.text || '❌ فشل تحميل ملف المؤلف';\n\n// Convert Markdown to HTML\nresponseText = responseText.replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>');\nresponseText = responseText.replace(/(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)/g, '<i>$1</i>');\nresponseText = responseText.replace(/__(.+?)__/g, '<b>$1</b>');\n\n// Extract famous books\nconst books = [];\nconst bookPattern = /\\d+\\.\\s*<i>(.+?)<\\/i>\\s*\\((.+?)\\)/g;\n\nlet match;\nwhile ((match = bookPattern.exec(responseText)) !== null) {\n  books.push({\n    title: match[1].trim(),\n    year: match[2].trim()\n  });\n}\n\n// Extract nationality\nconst nationalityMatch = responseText.match(/الجنسية:\\s*(.+?)(?=\\n|<)/i);\nconst nationality = nationalityMatch ? nationalityMatch[1].trim() : 'غير محدد';\n\n// Extract awards\nconst awardsMatch = responseText.match(/الجوائز:\\s*(.+?)(?=\\n\\n|<b>)/i);\nconst awards = awardsMatch ? awardsMatch[1].trim() : 'لا توجد جوائز مسجلة';\n\n// Add footer\nresponseText += '\\n\\n━━━━━━━━━━━━━━━━\\n📚 <i>اطلب معلومات عن مؤلف آخر في أي وقت!</i>';\n\nreturn [{\n  json: {\n    text: responseText,\n    parse_mode: 'HTML',\n    authorName: authorName,\n    nationality: nationality,\n    famousBooks: books,\n    booksCount: books.length,\n    awards: awards\n  }\n}];"
+      },
+      "id": "auth-005-format",
+      "name": "Format Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "auth-006-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input": {
+      "main": [
+        [
+          {
+            "node": "Generate Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral AI": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Profile",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Profile": {
+      "main": [
+        [
+          {
+            "node": "Format Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Profile": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

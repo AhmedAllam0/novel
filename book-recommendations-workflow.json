@@ -1,0 +1,178 @@
+{
+  "name": "📚 Book Recommendations Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "book-recommendations",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "book-rec-webhook-001"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "bookName",
+              "value": "={{ $json.bookName || $json.query || $json.input }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "userPreferences",
+              "value": "={{ $json.preferences || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "language",
+              "value": "={{ $json.language || 'ar' }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "count",
+              "value": "={{ $json.count || 5 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6g7-8901-2345-67890abcdef0",
+      "name": "Extract Input Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "model": "mistral-large-latest",
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 2000
+        }
+      },
+      "id": "c3d4e5f6-g7h8-9012-3456-7890abcdef01",
+      "name": "Mistral AI Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [480, 160],
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "8RlFJeQEIK1RW3KX",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=أوصي ب {{ $('Extract Input Data').item.json.count }} كتب مشابهة لـ \"{{ $('Extract Input Data').item.json.bookName }}\"\n\nتفضيلات المستخدم: {{ $('Extract Input Data').item.json.userPreferences || 'بدون تفضيلات محددة' }}\n\nقدم التوصيات بالتنسيق التالي:\n\n📚 <b>توصيات كتب مشابهة</b>\n\n1️⃣ <b>[اسم الكتاب الأول]</b>\n👤 المؤلف: [اسم المؤلف]\n📖 النوع: [نوع الكتاب]\n⭐ التقييم: [التقييم من 5]\n🔍 السبب: [لماذا هو مشابه - سطر واحد]\n\n2️⃣ ...\n\nملاحظات:\n- استخدم HTML فقط (<b>، <i>، <a>)\n- لا تستخدم Markdown أبداً\n- كن دقيقاً في التوصيات\n- ركز على الكتب العربية إذا كان الكتاب الأصلي عربياً",
+        "options": {
+          "systemMessage": "أنت خبير في الأدب العربي والعالمي. مهمتك تقديم توصيات كتب دقيقة ومناسبة بناءً على:\n1. الكتاب المرجعي\n2. تفضيلات المستخدم\n3. النوع الأدبي\n4. الأسلوب الكتابي\n\nقدم توصيات متنوعة تشمل:\n- كتب من نفس النوع الأدبي\n- كتب لنفس المؤلف\n- كتب بأسلوب مشابه\n- كتب من نفس الحقبة الزمنية\n\nاستخدم HTML فقط للتنسيق (ليس Markdown)."
+        }
+      },
+      "id": "d4e5f6g7-h8i9-0123-4567-890abcdef012",
+      "name": "Generate Recommendations",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format recommendations response\nconst inputData = $input.first().json;\nconst bookName = $('Extract Input Data').item.json.bookName;\n\nlet responseText = '';\n\nif (inputData.response) {\n  responseText = inputData.response;\n} else if (inputData.output) {\n  responseText = inputData.output;\n} else if (inputData.text) {\n  responseText = inputData.text;\n} else {\n  responseText = '❌ عذراً، لم أتمكن من إنشاء التوصيات.';\n}\n\n// Convert Markdown to HTML if needed\nresponseText = responseText.replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>');\nresponseText = responseText.replace(/(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)/g, '<i>$1</i>');\nresponseText = responseText.replace(/__(.+?)__/g, '<b>$1</b>');\n\n// Add footer\nresponseText += '\\n\\n━━━━━━━━━━━━━━━━\\n💡 <i>اطلب توصيات لكتب أخرى في أي وقت!</i>';\n\n// Extract book recommendations as structured data\nconst recommendations = [];\nconst bookPattern = /\\d+[️⃣\\)\\.]\\s*<b>(.+?)<\\/b>[\\s\\S]*?👤\\s*المؤلف:\\s*(.+?)\\n[\\s\\S]*?📖\\s*النوع:\\s*(.+?)\\n[\\s\\S]*?⭐\\s*التقييم:\\s*(.+?)\\n/g;\n\nlet match;\nwhile ((match = bookPattern.exec(responseText)) !== null) {\n  recommendations.push({\n    title: match[1].trim(),\n    author: match[2].trim(),\n    genre: match[3].trim(),\n    rating: match[4].trim()\n  });\n}\n\nreturn [{\n  json: {\n    text: responseText,\n    parse_mode: 'HTML',\n    recommendations: recommendations,\n    baseBook: bookName,\n    count: recommendations.length\n  }\n}];"
+      },
+      "id": "e5f6g7h8-i9j0-1234-5678-90abcdef0123",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "f6g7h8i9-j0k1-2345-6789-0abcdef01234",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Extract Input Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Input Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Recommendations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral AI Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Recommendations",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Recommendations": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
