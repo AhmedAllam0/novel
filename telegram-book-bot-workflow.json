@@ -1,0 +1,530 @@
+{
+  "name": "🤖💬 Bot Find Links to Download Books",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('sessionData').item.json.message || $('userInput').item.json.message.text }}",
+        "options": {
+          "systemMessage": "=\"🤖 أنت مساعد ذكي متخصص في البحث عن الكتب والروايات العربية 📚\n\n🎯 المهام:\n1. البحث عن روابط تحميل باستخدام find_book_download_link\n2. تقديم ملخصات ومعلومات\n3. اقتراح بدائل عند الحاجة\n\n✅ متى تستخدم الأداة:\n- عند أي طلب يحتوي: \\\"تحميل\\\"، \\\"رابط\\\"، \\\"PDF\\\"، \\\"كتاب\\\"\n- عند ذكر اسم كتاب أو رواية محددة\n\n📝 تنسيق الرد (مهم جداً):\n\n📚 <b>[اسم الكتاب]</b>\n\n🔍 <b>نبذة:</b>\n[ملخص مختصر 2-3 أسطر فقط]\n\n🎯 <b>روابط التحميل:</b>\n\n1️⃣ <b>[اسم الموقع]</b>\n🔗 <a href=\\\"[URL]\\\">[العنوان]</a>\n[إيموجي 📄 لو PDF]\n\n2️⃣ ...\n\n💡 <i>نصيحة: جرب الرابط الأول أولاً!</i>\n\n⚠️ قواعد التنسيق (صارمة جداً):\n\n1. ✅ استخدم HTML فقط:\n   - <b>نص عريض</b> (ليس **نص**)\n   - <i>نص مائل</i> (ليس *نص*)\n   - <a href=\"رابط\">نص</a>\n\n2. ❌ ممنوع استخدام Markdown:\n   - لا تستخدم **نص** أبداً\n   - لا تستخدم *نص* أبداً\n   - لا تستخدم __نص__ أبداً\n\n3. ✅ أمثلة صحيحة:\n   ✓ <b>رواية 1984</b>\n   ✓ في <b>أوقيانيا</b>\n   ✓ <b>\"الحزب الكبير\"</b>\n\n4. ❌ أمثلة خاطئة:\n   ✗ **رواية 1984**\n   ✗ في **أوقيانيا**\n   ✗ **\"الحزب الكبير\"**\n\n👤 المستخدم: {{ $('sessionData').item.json.firstName }}\n📩 الرسالة: {{ $('sessionData').item.json.message }}\n\n💬 آخر 3 محادثات:\n{{ $('latestContext').item.json.messages || 'لا توجد' }}\n\n🚀 ابدأ الرد:\"\n",
+          "returnIntermediateSteps": true
+        }
+      },
+      "id": "115c1837-ee9a-4cb3-90e2-4a0baa8d788a",
+      "name": "ChatCore",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        1088,
+        -64
+      ],
+      "typeVersion": 1.9,
+      "alwaysOutputData": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('sessionData').item.json.sessionId }}",
+        "text": "={{ $('Delay and Pass Data').first().json.text }}",
+        "replyMarkup": "=={{ $('Delay and Pass Data').first().json.reply_markup }}",
+        "forceReply": {},
+        "replyKeyboardOptions": {},
+        "replyKeyboardRemove": {},
+        "additionalFields": {
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "f0d97bc2-b2ec-48c7-a3d3-22fcfc0406fd",
+      "name": "sendTextMessage",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        2384,
+        -64
+      ],
+      "webhookId": "9e1db2b1-3bf0-460a-a3a4-cf78d57f2353",
+      "typeVersion": 1,
+      "credentials": {
+        "telegramApi": {
+          "id": "xnP9fkvEEq9ew47g",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "={{ $('userInput').item.json.message.text }}"
+            },
+            {
+              "name": "sessionId",
+              "value": "={{ $('userInput').item.json.message.chat.id }}"
+            },
+            {
+              "name": "firstName",
+              "value": "={{ $('userInput').item.json.message.from.first_name || 'مستخدم' }}"
+            },
+            {
+              "name": "username",
+              "value": "={{ $('userInput').item.json.message.from.username || 'unknown' }}"
+            },
+            {
+              "name": "language",
+              "value": "={{ $('userInput').item.json.message.from.language_code || 'ar' }}"
+            },
+            {
+              "name": "chatType",
+              "value": "={{ $('userInput').item.json.message.chat.type }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "messageId",
+              "value": "={{ $('userInput').item.json.message.message_id }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "isGroup",
+              "value": "={{ $('userInput').item.json.message.chat.type !== 'private' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "666f411b-ed2a-4cb1-9782-64082b75bb99",
+      "name": "sessionData",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        224,
+        -64
+      ],
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "groupMessages": true
+        }
+      },
+      "id": "d6eee001-1cd8-4db2-ac27-e098529a6cae",
+      "name": "conversationStore",
+      "type": "@n8n/n8n-nodes-langchain.memoryManager",
+      "position": [
+        448,
+        -64
+      ],
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('sessionData').item.json.sessionId }}",
+        "contextWindowLength": 15
+      },
+      "id": "be7f06d7-58e9-4920-897e-89a9bf2a4e38",
+      "name": "memoryRetriever",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        528,
+        160
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst lastItem = allItems[allItems.length - 1];\n\n// Helper functions\nfunction extractFirstLine(text) {\n  if (!text) return \"\";\n  return text.split('\\n')[0].replace(/^Input from user:\\s*/, '');\n}\n\nfunction trimEndNewline(text) {\n  if (!text) return \"\";\n  return text.replace(/\\n+$/, '');\n}\n\n// التحقق من وجود messages\nif (!lastItem || !Array.isArray(lastItem.json.messages)) {\n  return [{ json: { \n    messages: \"\",\n    sessionData: $('sessionData').item.json || {}\n  }}];\n}\n\nconst messages = lastItem.json.messages;\nconst count = messages.length;\n\n// لو مفيش رسائل\nif (count === 0) {\n  return [{ json: { \n    messages: \"\",\n    sessionData: $('sessionData').item.json || {}\n  }}];\n}\n\n// اختيار آخر 3 رسائل (بدل 1)\nconst selectedMessages = messages.slice(-3);\n\n// بناء النص\nconst combinedMessage = selectedMessages\n  .map((msg, idx) => {\n    const humanMsg = extractFirstLine(msg.human);\n    const aiMsg = trimEndNewline(msg.ai);\n    \n    return `💬 محادثة ${idx + 1}:\n👤 المستخدم: ${humanMsg}\n🤖 البوت: ${aiMsg}`;\n  })\n  .join('\\n\\n---\\n\\n');\n\n// الرجوع بالبيانات + sessionData\nreturn [{ json: { \n  messages: combinedMessage,\n  sessionData: $('sessionData').item.json || {},\n  messageCount: selectedMessages.length\n}}];"
+      },
+      "id": "13bdcafb-4047-4ba8-a3a9-5f7e9598aefa",
+      "name": "latestContext",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        800,
+        -64
+      ],
+      "typeVersion": 2,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "9564213e-bd1d-41f0-b428-ddeb92339213",
+      "name": "userInput",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [
+        0,
+        -64
+      ],
+      "webhookId": "4e9f6007-08b0-451c-a0f4-0739a51c6842",
+      "typeVersion": 1,
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "xnP9fkvEEq9ew47g",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('sessionData').item.json.sessionId }}",
+        "contextWindowLength": 15
+      },
+      "id": "9ca1acfa-a216-4a8a-8183-ad51cc7edfa5",
+      "name": "conversationMemory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "position": [
+        1152,
+        160
+      ],
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {
+        "model": "mistral-large-latest",
+        "options": {
+          "temperature": 0.3,
+          "maxRetries": 2,
+          "topP": 0.9
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatMistralCloud",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        160
+      ],
+      "id": "e1834c37-a04c-44dc-a48b-b5dbb059e9f4",
+      "name": "Mistral Cloud Chat Model1",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "8RlFJeQEIK1RW3KX",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "find download links ",
+        "workflowId": {
+          "__rl": true,
+          "value": "0L23kFKfH7FjLarJ",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/0L23kFKfH7FjLarJ",
+          "cachedResultName": "Firecrawl"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "input",
+              "displayName": "input",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "bookName",
+              "displayName": "bookName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "search",
+              "displayName": "search",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        160
+      ],
+      "id": "175b943b-3ec3-4c5c-a563-d687c0020916",
+      "name": "find_book_download_link"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════\n// 📱 منسق رسائل Telegram - مع إصلاح Markdown\n// ═══════════════════════════════════════════════════════════\n\nconst inputData = $input.first().json;\n\nconsole.log('📥 البيانات المستلمة من ChatCore:', JSON.stringify(inputData).substring(0, 500));\n\n// ═══════════════════════════════════════════════════════════\n// ✅ chatcore يعيد فقط output نص عادي\n// ═══════════════════════════════════════════════════════════\n\nlet responseText = '';\n\n// 1. أولاً: محاولة قراءة output مباشرة\nif (inputData.output && typeof inputData.output === 'string') {\n  responseText = inputData.output;\n  console.log('✅ استخدام output من chatcore مباشرة');\n}\n// 2. إذا لم يكن موجود، جرب text\nelse if (inputData.text && typeof inputData.text === 'string') {\n  responseText = inputData.text;\n  console.log('✅ استخدام text من chatcore');\n}\n// 3. آخر محاولة: response\nelse if (inputData.response && typeof inputData.response === 'string') {\n  responseText = inputData.response;\n  console.log('✅ استخدام response من chatcore');\n}\n// 4. لو مفيش أي حاجة\nelse {\n  responseText = '❌ عذراً، حدث خطأ في معالجة الرد. حاول مرة أخرى.';\n  console.log('❌ لم يتم العثور على نص في الرد');\n}\n\n// ═══════════════════════════════════════════════════════════\n// 🔧 إصلاح Markdown → HTML تلقائياً\n// ═══════════════════════════════════════════════════════════\n\nconsole.log('🔧 إصلاح التنسيق...');\n\n// تحويل **نص** إلى <b>نص</b>\nresponseText = responseText.replace(/\\*\\*(.+?)\\*\\*/g, '<b>\\$1</b>');\n\n// تحويل *نص* إلى <i>نص</i> (لكن بعد ما خلصنا من **)\nresponseText = responseText.replace(/(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)/g, '<i>\\$1</i>');\n\n// تحويل __نص__ إلى <b>نص</b>\nresponseText = responseText.replace(/__(.+?)__/g, '<b>\\$1</b>');\n\n// تحويل _نص_ إلى <i>نص</i>\nresponseText = responseText.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<i>\\$1</i>');\n\n// ═══════════════════════════════════════════════════════════\n// 🧹 تنظيف إضافي\n// ═══════════════════════════════════════════════════════════\n\n// إزالة <web> tags\nresponseText = responseText.replace(/<web>[\\s\\S]*?<\\/web>/gi, '');\n\n// إزالة أي source tags\nresponseText = responseText.replace(/Source $$\\d+$$.*?$/gim, '');\n\n// تنظيف المسافات الزائدة\nresponseText = responseText.replace(/\\n{3,}/g, '\\n\\n');\n\nconsole.log('✅ تم إصلاح التنسيق');\n\n// ═══════════════════════════════════════════════════════════\n// 📊 استخراج بيانات إضافية (إن وجدت)\n// ═══════════════════════════════════════════════════════════\n\n// محاولة استخراج معلومات من intermediateSteps إذا كان ChatCore يعيدها\nlet toolResults = [];\nif (inputData.intermediateSteps && Array.isArray(inputData.intermediateSteps)) {\n  for (const step of inputData.intermediateSteps) {\n    if (step.action && step.action.tool === 'find_book_download_link') {\n      try {\n        const observation = JSON.parse(step.observation);\n        if (observation.results && Array.isArray(observation.results)) {\n          toolResults = observation.results;\n          console.log(`✅ وجدت ${toolResults.length} نتيجة من الـ tool`);\n        }\n      } catch (e) {\n        console.log('⚠️ خطأ في parsing tool results');\n      }\n    }\n  }\n}\n\n// ═══════════════════════════════════════════════════════════\n// 🎨 إضافة footer جميل\n// ═══════════════════════════════════════════════════════════\n\nresponseText += '\\n\\n━━━━━━━━━━━━━━━━\\n💬 <i>اكتب اسم كتاب آخر للبحث عنه!</i>';\n\n// ═══════════════════════════════════════════════════════════\n// 📤 إرجاع النتيجة\n// ═══════════════════════════════════════════════════════════\n\nreturn [{\n  json: {\n    text: responseText,\n    parse_mode: 'HTML',\n    disable_web_page_preview: true,\n    hasResults: toolResults.length > 0,\n    allResults: toolResults  // لاستخدامها في Build Inline Keyboard\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -64
+      ],
+      "id": "6fa7c03d-96cb-42c8-a3db-9e6a05ef1adb",
+      "name": "Format Telegram Message"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════\n// 🎮 منشئ الأزرار - النسخة المبسطة\n// ═══════════════════════════════════════════════════════════\n\nconst messageData = $input.first().json;\nconst hasResults = messageData.hasResults || false;\nconst results = messageData.allResults || [];\n\nconst keyboard = {\n  inline_keyboard: []\n};\n\n// ═══════════════════════════════════════════════════════════\n// 🔗 أزرار الروابط (إن وجدت)\n// ═══════════════════════════════════════════════════════════\n\nif (hasResults && results.length > 0) {\n  // أول 3 روابط في صف واحد\n  const topResults = results.slice(0, 3);\n  const row = [];\n  \n  topResults.forEach((result, idx) => {\n    const emoji = ['1️⃣', '2️⃣', '3️⃣'][idx];\n    const siteName = (result.site || result.domain || 'موقع')\n      .replace(/📚|📖|🌐|⭐|🏛️/g, '')\n      .trim()\n      .substring(0, 12);\n    \n    row.push({\n      text: `${emoji} ${siteName}`,\n      url: result.url\n    });\n  });\n  \n  if (row.length > 0) {\n    keyboard.inline_keyboard.push(row);\n  }\n  \n  // لو فيه روابط أكتر (4 و 5)\n  if (results.length > 3) {\n    const row2 = [];\n    const moreResults = results.slice(3, 5);\n    \n    moreResults.forEach((result, idx) => {\n      const emoji = ['4️⃣', '5️⃣'][idx];\n      const siteName = (result.site || result.domain || 'موقع')\n        .replace(/📚|📖|🌐|⭐|🏛️/g, '')\n        .trim()\n        .substring(0, 12);\n      \n      row2.push({\n        text: `${emoji} ${siteName}`,\n        url: result.url\n      });\n    });\n    \n    if (row2.length > 0) {\n      keyboard.inline_keyboard.push(row2);\n    }\n  }\n}\n\n// ═══════════════════════════════════════════════════════════\n// 🎬 الإجراءات العامة (دائماً موجودة)\n// ═══════════════════════════════════════════════════════════\n\nkeyboard.inline_keyboard.push([\n  {\n    text: '🔍 بحث عن كتاب آخر',\n    callback_data: 'new_search'\n  }\n]);\n\nkeyboard.inline_keyboard.push([\n  {\n    text: '⭐ كتب مشابهة',\n    callback_data: 'similar_books'\n  },\n  {\n    text: '📚 الأكثر شعبية',\n    callback_data: 'popular_books'\n  }\n]);\n\nkeyboard.inline_keyboard.push([\n  {\n    text: '📤 شارك البوت مع أصدقائك',\n    switch_inline_query: 'جرب بوت تحميل الكتب المجاني! 📚'\n  }\n]);\n\n// ═══════════════════════════════════════════════════════════\n// 📤 إرجاع النتيجة\n// ═══════════════════════════════════════════════════════════\n\nreturn [{\n  json: {\n    text: messageData.text,\n    parse_mode: 'HTML',\n    reply_markup: keyboard,\n    disable_web_page_preview: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        -64
+      ],
+      "id": "9287af72-6814-4b5a-8fe9-e01acbc2ae2a",
+      "name": "Build Inline Keyboard"
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $('sessionData').item.json.sessionId }}"
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2160,
+        -64
+      ],
+      "id": "c6a2c175-b1f5-41ea-ad84-c6dccc65fa91",
+      "name": "Send a chat action",
+      "webhookId": "1cadd5a1-092e-44c5-9b7a-4eab25a3bb6b",
+      "credentials": {
+        "telegramApi": {
+          "id": "xnP9fkvEEq9ew47g",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════\n// ⏱️ تأخير احترافي مع تمرير البيانات الصحيحة\n// ═══════════════════════════════════════════════════════════\n\n// 📦 جلب البيانات من Build Inline Keyboard\nconst buildKeyboardNode = $('Build Inline Keyboard');\nconst keyboardData = buildKeyboardNode.first().json;\n\nconsole.log('═══════════════════════════════════════');\nconsole.log('🔍 Debug Info:');\nconsole.log('text length:', keyboardData.text?.length || 0);\nconsole.log('reply_markup exists:', !!keyboardData.reply_markup);\nconsole.log('═══════════════════════════════════════');\n\n// المراحل\nconst stages = [\n  '🔍 المرحلة 1/4: البحث في قواعد البيانات...',\n  '📊 المرحلة 2/4: تحليل وترتيب النتائج...',\n  '🎨 المرحلة 3/4: تنسيق الروابط والأزرار...',\n  '✨ المرحلة 4/4: تجهيز الرد النهائي...'\n];\n\nfor (const stage of stages) {\n  console.log(stage);\n  await new Promise(r => setTimeout(r, 450));\n}\n\nconsole.log('✅ تم! جاري الإرسال...');\n\n// ═══════════════════════════════════════════════════════════\n// 📤 إرجاع البيانات - reply_markup كـ Object (مش String!)\n// ═══════════════════════════════════════════════════════════\n\nreturn [{\n  json: {\n    text: keyboardData.text,\n    reply_markup: keyboardData.reply_markup,  // ⬅️ Object مباشرة! (بدون stringify)\n    parse_mode: 'HTML',\n    disable_web_page_preview: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        -64
+      ],
+      "id": "033a18c2-8148-4e89-8ce7-a7203dcb5651",
+      "name": "Delay and Pass Data"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "ChatCore": {
+      "main": [
+        [
+          {
+            "node": "Format Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "userInput": {
+      "main": [
+        [
+          {
+            "node": "sessionData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sessionData": {
+      "main": [
+        [
+          {
+            "node": "conversationStore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "latestContext": {
+      "main": [
+        [
+          {
+            "node": "ChatCore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "memoryRetriever": {
+      "ai_memory": [
+        [
+          {
+            "node": "conversationStore",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "conversationStore": {
+      "main": [
+        [
+          {
+            "node": "latestContext",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "conversationMemory": {
+      "ai_memory": [
+        [
+          {
+            "node": "ChatCore",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mistral Cloud Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "ChatCore",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "find_book_download_link": {
+      "ai_tool": [
+        [
+          {
+            "node": "ChatCore",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Build Inline Keyboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Inline Keyboard": {
+      "main": [
+        [
+          {
+            "node": "Delay and Pass Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a chat action": {
+      "main": [
+        [
+          {
+            "node": "sendTextMessage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delay and Pass Data": {
+      "main": [
+        [
+          {
+            "node": "Send a chat action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "08aa8371-0fd8-4f12-8b85-fb2d096e40b0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bd20fadb32275a6435f0552a03c417ec118fbafa62991c11c7a720ebf7724a66"
+  },
+  "id": "sEeJx76h8FVxpkrq",
+  "tags": []
+}
