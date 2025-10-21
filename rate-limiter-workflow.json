@@ -1,0 +1,111 @@
+{
+  "name": "🛡️ Rate Limiter & Abuse Prevention",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rate-limiter",
+        "options": {}
+      },
+      "id": "webhook-input",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "position": [200, 300],
+      "webhookId": "rate-limiter-webhook",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════\n// 🛡️ Rate Limiter - Check User Limits\n// ═══════════════════════════════════════════════════════════\n\nconst input = $input.first().json;\nconst userId = input.userId || input.sessionId;\nconst action = input.action || 'check';\n\nif (!userId) {\n  return [{\n    json: {\n      allowed: false,\n      error: 'User ID is required',\n      code: 'MISSING_USER_ID'\n    }\n  }];\n}\n\n// Rate limit configuration\nconst LIMITS = {\n  // Per minute limits\n  perMinute: 10,\n  // Per hour limits  \n  perHour: 100,\n  // Per day limits\n  perDay: 500,\n  // Burst allowance\n  burstLimit: 15\n};\n\n// In production, this would use Redis or a proper database\n// For now, we'll simulate with in-memory storage\nconst now = Date.now();\nconst currentMinute = Math.floor(now / 60000);\nconst currentHour = Math.floor(now / 3600000);\nconst currentDay = Math.floor(now / 86400000);\n\n// Generate mock usage data (in production, fetch from database)\nconst usage = generateMockUsage(userId, currentMinute, currentHour, currentDay);\n\n// Check limits\nconst checks = {\n  perMinute: usage.minute < LIMITS.perMinute,\n  perHour: usage.hour < LIMITS.perHour,\n  perDay: usage.day < LIMITS.perDay,\n  burst: usage.burst < LIMITS.burstLimit\n};\n\nconst allowed = checks.perMinute && checks.perHour && checks.perDay;\n\nconst response = {\n  userId: userId,\n  action: action,\n  allowed: allowed,\n  timestamp: new Date().toISOString(),\n  \n  usage: {\n    minute: usage.minute,\n    hour: usage.hour,\n    day: usage.day,\n    burst: usage.burst\n  },\n  \n  limits: LIMITS,\n  \n  remaining: {\n    minute: Math.max(0, LIMITS.perMinute - usage.minute),\n    hour: Math.max(0, LIMITS.perHour - usage.hour),\n    day: Math.max(0, LIMITS.perDay - usage.day)\n  },\n  \n  resetIn: {\n    minute: 60 - (Math.floor(now / 1000) % 60),\n    hour: 3600 - (Math.floor(now / 1000) % 3600),\n    day: 86400 - (Math.floor(now / 1000) % 86400)\n  }\n};\n\nif (!allowed) {\n  let limitType = 'unknown';\n  let waitTime = 0;\n  \n  if (!checks.perMinute) {\n    limitType = 'per_minute';\n    waitTime = response.resetIn.minute;\n  } else if (!checks.perHour) {\n    limitType = 'per_hour';\n    waitTime = response.resetIn.hour;\n  } else if (!checks.perDay) {\n    limitType = 'per_day';\n    waitTime = response.resetIn.day;\n  }\n  \n  response.error = {\n    code: 'RATE_LIMIT_EXCEEDED',\n    limitType: limitType,\n    message: `Rate limit exceeded: ${limitType}`,\n    waitTime: waitTime,\n    retryAfter: new Date(now + waitTime * 1000).toISOString()\n  };\n}\n\nfunction generateMockUsage(userId, minute, hour, day) {\n  // Simulate usage based on user ID hash\n  const hash = userId.toString().split('').reduce((a, b) => {\n    a = ((a << 5) - a) + b.charCodeAt(0);\n    return a & a;\n  }, 0);\n  \n  const baseUsage = Math.abs(hash) % 5;\n  \n  return {\n    minute: baseUsage,\n    hour: baseUsage * 7,\n    day: baseUsage * 45,\n    burst: baseUsage\n  };\n}\n\nconsole.log('🛡️ Rate limit check:', {\n  userId,\n  allowed,\n  usage: response.usage\n});\n\nreturn [{ json: response }];"
+      },
+      "id": "check-rate-limit",
+      "name": "Check Rate Limit",
+      "type": "n8n-nodes-base.code",
+      "position": [400, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "allowed",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-allowed",
+      "name": "Check if Allowed",
+      "type": "n8n-nodes-base.if",
+      "position": [600, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════\n// ✅ Request Allowed - Format Success Response\n// ═══════════════════════════════════════════════════════════\n\nconst data = $input.first().json;\n\nconst response = {\n  success: true,\n  allowed: true,\n  userId: data.userId,\n  timestamp: data.timestamp,\n  \n  limits: {\n    remaining: data.remaining,\n    resetIn: data.resetIn\n  },\n  \n  headers: {\n    'X-RateLimit-Limit-Minute': data.limits.perMinute,\n    'X-RateLimit-Limit-Hour': data.limits.perHour,\n    'X-RateLimit-Limit-Day': data.limits.perDay,\n    'X-RateLimit-Remaining-Minute': data.remaining.minute,\n    'X-RateLimit-Remaining-Hour': data.remaining.hour,\n    'X-RateLimit-Remaining-Day': data.remaining.day,\n    'X-RateLimit-Reset-Minute': data.resetIn.minute,\n    'X-RateLimit-Reset-Hour': data.resetIn.hour\n  }\n};\n\nconsole.log('✅ Request allowed for user:', data.userId);\n\nreturn [{ json: response }];"
+      },
+      "id": "format-allowed",
+      "name": "Format Allowed Response",
+      "type": "n8n-nodes-base.code",
+      "position": [800, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════\n// ❌ Request Blocked - Format Error Response\n// ═══════════════════════════════════════════════════════════\n\nconst data = $input.first().json;\nconst error = data.error;\n\nconst response = {\n  success: false,\n  allowed: false,\n  userId: data.userId,\n  timestamp: data.timestamp,\n  \n  error: {\n    code: error.code,\n    message: error.message,\n    limitType: error.limitType,\n    retryAfter: error.retryAfter\n  },\n  \n  text: generateArabicErrorMessage(error),\n  parse_mode: 'HTML',\n  \n  usage: data.usage,\n  limits: data.limits,\n  remaining: data.remaining,\n  \n  headers: {\n    'X-RateLimit-Limit-Minute': data.limits.perMinute,\n    'X-RateLimit-Limit-Hour': data.limits.perHour,\n    'X-RateLimit-Limit-Day': data.limits.perDay,\n    'X-RateLimit-Remaining-Minute': 0,\n    'X-RateLimit-Remaining-Hour': data.remaining.hour,\n    'X-RateLimit-Remaining-Day': data.remaining.day,\n    'X-RateLimit-Reset': error.waitTime,\n    'Retry-After': error.waitTime\n  }\n};\n\nfunction generateArabicErrorMessage(error) {\n  const waitMinutes = Math.ceil(error.waitTime / 60);\n  \n  let message = `\n⚠️ <b>تم تجاوز الحد المسموح</b>\n\n🛡️ لقد استخدمت البوت بشكل مكثف خلال الفترة الماضية.\nللحفاظ على جودة الخدمة للجميع، يرجى الانتظار قليلاً.\n\n`;\n\n  if (error.limitType === 'per_minute') {\n    message += `⏱️ <b>الحد:</b> ${error.waitTime} ثانية\\n`;\n    message += `💡 <b>نصيحة:</b> حاول تقليل عدد الطلبات في الدقيقة الواحدة`;\n  } else if (error.limitType === 'per_hour') {\n    message += `⏱️ <b>الانتظار:</b> ${waitMinutes} دقيقة\\n`;\n    message += `💡 <b>نصيحة:</b> يمكنك استخدام البوت مرة أخرى بعد ساعة`;\n  } else if (error.limitType === 'per_day') {\n    message += `⏱️ <b>الانتظار:</b> ${Math.ceil(error.waitTime / 3600)} ساعة\\n`;\n    message += `💡 <b>نصيحة:</b> لقد وصلت للحد اليومي، سيتم إعادة تعيين الحد غداً`;\n  }\n  \n  message += `\\n\\n🕐 <b>المحاولة التالية:</b> ${new Date(error.retryAfter).toLocaleString('ar-EG')}`;\n  message += `\\n\\n<i>شكراً لتفهمك! 🙏</i>`;\n  \n  return message;\n}\n\nconsole.log('❌ Request blocked for user:', data.userId, 'Reason:', error.limitType);\n\nreturn [{ json: response }];"
+      },
+      "id": "format-blocked",
+      "name": "Format Blocked Response",
+      "type": "n8n-nodes-base.code",
+      "position": [800, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1000, 300],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [[{ "node": "Check Rate Limit", "type": "main", "index": 0 }]]
+    },
+    "Check Rate Limit": {
+      "main": [[{ "node": "Check if Allowed", "type": "main", "index": 0 }]]
+    },
+    "Check if Allowed": {
+      "main": [
+        [{ "node": "Format Allowed Response", "type": "main", "index": 0 }],
+        [{ "node": "Format Blocked Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Allowed Response": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Format Blocked Response": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-21T00:00:00.000Z",
+  "versionId": "rate-limiter-v1"
+}

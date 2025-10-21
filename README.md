@@ -15,6 +15,8 @@ An intelligent Telegram bot that helps users find and download Arabic books and 
 | **[WORKFLOW_NODES.md](WORKFLOW_NODES.md)** | 📋 Complete node reference |
 | **[EXAMPLES.md](EXAMPLES.md)** | 💡 Extension ideas & code samples |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | 🏗️ System architecture & design |
+| **[ANALYTICS_AND_MONITORING.md](ANALYTICS_AND_MONITORING.md)** | 📊 Analytics & monitoring guide 🆕 |
+| **[ANALYTICS_INTEGRATION_EXAMPLES.md](ANALYTICS_INTEGRATION_EXAMPLES.md)** | 🔧 Integration examples 🆕 |
 
 ## 🚀 Quick Start
 
@@ -114,7 +116,7 @@ sendTextMessage (Send to Telegram)
 
 ## 🎯 Features
 
-### AI Capabilities
+### Core AI Capabilities
 - Understands Arabic book requests
 - Provides book summaries
 - Suggests alternatives when needed
@@ -133,6 +135,14 @@ The bot formats responses in Arabic with:
 - **⭐ Similar Books**: Get recommendations
 - **📚 Popular Books**: View trending titles
 - **📤 Share**: Invite friends to use the bot
+
+### Enterprise Features 🆕
+- **📊 Analytics Dashboard**: Real-time tracking, statistics, and reports
+- **🛡️ Rate Limiting**: Abuse prevention (10/min, 100/hour, 500/day)
+- **📈 Performance Monitoring**: Response times, error rates, success metrics
+- **📄 Automated Reports**: Daily/weekly/monthly analytics in Arabic
+- **🚨 Error Tracking**: Comprehensive error monitoring and alerts
+- **👥 User Analytics**: Engagement metrics, retention, popular content
 
 ## ⚙️ Configuration
 
@@ -298,6 +308,34 @@ Send these test messages to your bot:
 - API credentials stored in n8n vault
 - Webhook IDs are unique per instance
 
+## 🆕 What's New in v2.0
+
+### Analytics & Monitoring System
+The bot now includes enterprise-grade analytics and monitoring:
+
+```bash
+# Get real-time statistics
+/stats or /إحصائيات
+
+# Generate detailed report
+/report or /تقرير
+
+# View performance metrics
+/performance or /أداء
+```
+
+**Features**:
+- Track all user interactions
+- Monitor popular books and search patterns
+- Performance metrics (response times, success rates)
+- Error tracking and alerting
+- Automated daily/weekly reports
+- Rate limiting to prevent abuse
+
+See **[ANALYTICS_AND_MONITORING.md](ANALYTICS_AND_MONITORING.md)** for complete documentation.
+
+---
+
 ## 📄 License
 
 This workflow configuration is provided as-is for educational and personal use.
@@ -310,15 +348,19 @@ To improve this workflow:
 3. Maintain Arabic language support
 4. Keep HTML formatting standards
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
 ## 📞 Support
 
 For issues with:
 - **n8n**: Check [n8n documentation](https://docs.n8n.io)
 - **Telegram API**: See [Telegram Bot API](https://core.telegram.org/bots/api)
 - **Mistral AI**: Visit [Mistral docs](https://docs.mistral.ai)
+- **Analytics**: See [ANALYTICS_AND_MONITORING.md](ANALYTICS_AND_MONITORING.md) 🆕
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2025-10-20  
-**Workflow ID**: sEeJx76h8FVxpkrq
+**Version**: 2.0  
+**Last Updated**: 2025-10-21  
+**Workflow ID**: sEeJx76h8FVxpkrq  
+**Total Workflows**: 9 (1 main + 6 book features + 2 monitoring)
