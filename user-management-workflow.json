@@ -1,0 +1,307 @@
+{
+  "name": "User Management - Profiles & Preferences",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "user-management",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "user-management-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse user management request\nconst body = $input.item.json.body;\n\nconst request = {\n  action: body.action || 'get_profile', // get_profile, update_profile, get_preferences, update_preferences, get_history, add_favorite\n  userId: body.userId,\n  data: body.data || {}\n};\n\n// Validate required fields\nif (!request.userId) {\n  throw new Error('userId is required');\n}\n\nreturn { json: request };"
+      },
+      "id": "parse-request",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "operation": "equals",
+              "value2": "get_profile"
+            }
+          ]
+        }
+      },
+      "id": "route-by-action",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"User ID\",\n    \"title\": {\n      \"equals\": \"{{$('parse-request').item.json.userId}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "get-user-profile",
+      "name": "Get User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format user profile with enhanced data\nconst results = $input.item.json.results || [];\n\nif (results.length === 0) {\n  return { json: { \n    success: false,\n    error: 'User not found',\n    userId: $('parse-request').item.json.userId\n  }};\n}\n\nconst user = results[0];\nconst props = user.properties;\n\n// Get reading history statistics\nconst searchHistory = props['Related Events']?.relation || [];\nconst favoriteBooks = props['Related Books']?.relation || [];\n\nconst profile = {\n  success: true,\n  userId: props['User ID']?.title?.[0]?.text?.content || '',\n  firstName: props['First Name']?.rich_text?.[0]?.text?.content || 'Unknown',\n  username: props['Username']?.rich_text?.[0]?.text?.content || '',\n  language: props['Language']?.select?.name || 'ar',\n  status: props['Status']?.select?.name || 'active',\n  \n  stats: {\n    messagesSent: props['Messages Sent']?.number || 0,\n    totalSearches: props['Total Searches']?.number || 0,\n    totalDownloads: props['Total Downloads']?.number || 0,\n    totalSessions: props['Total Sessions']?.number || 0,\n    favoriteBooks: favoriteBooks.length,\n    searchHistory: searchHistory.length\n  },\n  \n  activity: {\n    firstSeen: props['First Seen']?.date?.start || null,\n    lastSeen: props['Last Seen']?.date?.start || null,\n    registrationDate: props['Registration Date']?.date?.start || null\n  },\n  \n  preferences: {\n    favoriteGenre: props['Favorite Genre']?.text || '',\n    favoriteAuthor: props['Favorite Author']?.text || '',\n    lastBookSearched: props['Last Book Searched']?.text || ''\n  },\n  \n  performance: {\n    averageResponseTime: props['Average Response Time']?.number || 0,\n    successRate: props['Success Rate']?.number || 0\n  },\n  \n  notionPageId: user.id\n};\n\nreturn { json: profile };"
+      },
+      "id": "format-profile",
+      "name": "Format Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"User ID\",\n    \"title\": {\n      \"equals\": \"{{$('parse-request').item.json.userId}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "find-user-for-update",
+      "name": "Find User for Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{$json.results[0].id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"First Name\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-request').item.json.data.firstName || $json.results[0].properties['First Name'].rich_text[0].text.content}}\"\n          }\n        }\n      ]\n    },\n    \"Language\": {\n      \"select\": {\n        \"name\": \"{{$('parse-request').item.json.data.language || $json.results[0].properties['Language'].select.name}}\"\n      }\n    },\n    \"Status\": {\n      \"select\": {\n        \"name\": \"{{$('parse-request').item.json.data.status || $json.results[0].properties['Status'].select.name}}\"\n      }\n    },\n    \"Favorite Genre\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-request').item.json.data.favoriteGenre || ''}}\"\n          }\n        }\n      ]\n    },\n    \"Favorite Author\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-request').item.json.data.favoriteAuthor || ''}}\"\n          }\n        }\n      ]\n    },\n    \"Notes\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-request').item.json.data.notes || ''}}\"\n          }\n        }\n      ]\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "update-user-profile",
+      "name": "Update User Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format update response\nreturn {\n  json: {\n    success: true,\n    message: 'Profile updated successfully',\n    userId: $('parse-request').item.json.userId,\n    updatedFields: $('parse-request').item.json.data,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-update-response",
+      "name": "Format Update Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_SEARCHES_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"User\",\n    \"relation\": {\n      \"contains\": \"{{$('parse-request').item.json.userId}}\"\n    }\n  },\n  \"sorts\": [\n    {\n      \"property\": \"Timestamp\",\n      \"direction\": \"descending\"\n    }\n  ],\n  \"page_size\": {{$('parse-request').item.json.data.limit || 20}}\n}",
+        "options": {}
+      },
+      "id": "get-search-history",
+      "name": "Get Search History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format search history\nconst results = $input.item.json.results || [];\n\nconst history = results.map((search, index) => {\n  const props = search.properties;\n  return {\n    rank: index + 1,\n    searchQuery: props['Search Query']?.title?.[0]?.text?.content || '',\n    bookFound: props['Book Found']?.relation?.[0]?.id || null,\n    timestamp: props['Timestamp']?.date?.start || null,\n    success: props['Success']?.checkbox || false,\n    resultsCount: props['Results Count']?.number || 0,\n    responseTime: props['Response Time']?.number || 0,\n    searchType: props['Search Type']?.select?.name || 'unknown',\n    language: props['Language']?.select?.name || 'ar'\n  };\n});\n\nreturn { \n  json: {\n    success: true,\n    userId: $('parse-request').item.json.userId,\n    history,\n    total: results.length\n  }\n};"
+      },
+      "id": "format-search-history",
+      "name": "Format Search History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"User ID\",\n    \"title\": {\n      \"equals\": \"{{$('parse-request').item.json.userId}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "find-user-for-favorite",
+      "name": "Find User for Favorite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_BOOKS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Book Title\",\n    \"title\": {\n      \"equals\": \"{{$('parse-request').item.json.data.bookTitle}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "find-book-for-favorite",
+      "name": "Find Book for Favorite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 700]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{$('find-user-for-favorite').item.json.results[0].id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"Related Books\": {\n      \"relation\": [\n        ...{{$('find-user-for-favorite').item.json.results[0].properties['Related Books'].relation}},\n        {\n          \"id\": \"{{$json.results[0].id}}\"\n        }\n      ]\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "add-favorite-book",
+      "name": "Add Favorite Book",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 700]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format favorite response\nreturn {\n  json: {\n    success: true,\n    message: 'Book added to favorites',\n    userId: $('parse-request').item.json.userId,\n    bookTitle: $('parse-request').item.json.data.bookTitle,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-favorite-response",
+      "name": "Format Favorite Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json, null, 2)}}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Error processing request\",\n  \"error\": \"{{$json.error}}\",\n  \"timestamp\": \"{{new Date().toISOString()}}\"\n}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Parse Request", "type": "main", "index": 0}]]
+    },
+    "Parse Request": {
+      "main": [[{"node": "Route by Action", "type": "main", "index": 0}]]
+    },
+    "Route by Action": {
+      "main": [
+        [{"node": "Get User Profile", "type": "main", "index": 0}],
+        [{"node": "Find User for Update", "type": "main", "index": 0}],
+        [{"node": "Get Search History", "type": "main", "index": 0}],
+        [{"node": "Find User for Favorite", "type": "main", "index": 0}]
+      ]
+    },
+    "Get User Profile": {
+      "main": [[{"node": "Format Profile", "type": "main", "index": 0}]]
+    },
+    "Format Profile": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Find User for Update": {
+      "main": [[{"node": "Update User Profile", "type": "main", "index": 0}]]
+    },
+    "Update User Profile": {
+      "main": [[{"node": "Format Update Response", "type": "main", "index": 0}]]
+    },
+    "Format Update Response": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Get Search History": {
+      "main": [[{"node": "Format Search History", "type": "main", "index": 0}]]
+    },
+    "Format Search History": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Find User for Favorite": {
+      "main": [[{"node": "Find Book for Favorite", "type": "main", "index": 0}]]
+    },
+    "Find Book for Favorite": {
+      "main": [[{"node": "Add Favorite Book", "type": "main", "index": 0}]]
+    },
+    "Add Favorite Book": {
+      "main": [[{"node": "Format Favorite Response", "type": "main", "index": 0}]]
+    },
+    "Format Favorite Response": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-21T00:00:00.000Z",
+  "versionId": "1.0.0"
+}

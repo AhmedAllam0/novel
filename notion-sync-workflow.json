@@ -1,0 +1,346 @@
+{
+  "name": "Notion Sync - Book Bot Analytics",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "notion-sync-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate incoming event data\nconst body = $input.item.json.body;\n\nconst eventData = {\n  eventType: body.eventType || 'unknown',\n  userId: parseInt(body.userId) || 0,\n  userName: body.userName || 'Unknown',\n  username: body.username || '',\n  bookName: body.bookName || '',\n  bookAuthor: body.bookAuthor || '',\n  searchQuery: body.searchQuery || '',\n  success: body.success === true,\n  error: body.error || '',\n  responseTime: parseFloat(body.responseTime) || 0,\n  timestamp: body.timestamp || new Date().toISOString(),\n  sessionId: body.sessionId || '',\n  workflowUsed: body.workflowUsed || 'main-bot',\n  linksCount: parseInt(body.linksCount) || 0,\n  language: body.language || 'ar',\n  chatType: body.chatType || 'private',\n  buttonClicked: body.buttonClicked || '',\n  metadata: body.metadata || {}\n};\n\n// Generate unique event ID\neventData.eventId = `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n\nreturn { json: eventData };"
+      },
+      "id": "parse-event-data",
+      "name": "Parse Event Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"User ID\",\n    \"title\": {\n      \"equals\": \"{{$json.userId}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "check-user-exists",
+      "name": "Check User Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.results.length}}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "user-exists-check",
+      "name": "User Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"{{$env.NOTION_USERS_DB_ID}}\"\n  },\n  \"properties\": {\n    \"User ID\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-event-data').item.json.userId}}\"\n          }\n        }\n      ]\n    },\n    \"First Name\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-event-data').item.json.userName}}\"\n          }\n        }\n      ]\n    },\n    \"Username\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-event-data').item.json.username}}\"\n          }\n        }\n      ]\n    },\n    \"Language\": {\n      \"select\": {\n        \"name\": \"{{$('parse-event-data').item.json.language}}\"\n      }\n    },\n    \"First Seen\": {\n      \"date\": {\n        \"start\": \"{{$('parse-event-data').item.json.timestamp}}\"\n      }\n    },\n    \"Last Seen\": {\n      \"date\": {\n        \"start\": \"{{$('parse-event-data').item.json.timestamp}}\"\n      }\n    },\n    \"Status\": {\n      \"select\": {\n        \"name\": \"active\"\n      }\n    },\n    \"Messages Sent\": {\n      \"number\": 1\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-new-user",
+      "name": "Create New User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{$json.results[0].id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"Last Seen\": {\n      \"date\": {\n        \"start\": \"{{$('parse-event-data').item.json.timestamp}}\"\n      }\n    },\n    \"Messages Sent\": {\n      \"number\": {{$json.results[0].properties['Messages Sent'].number + 1}}\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "update-existing-user",
+      "name": "Update Existing User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_BOOKS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Book Title\",\n    \"title\": {\n      \"equals\": \"{{$('parse-event-data').item.json.bookName}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "check-book-exists",
+      "name": "Check Book Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.results.length}}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "book-exists-check",
+      "name": "Book Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"{{$env.NOTION_BOOKS_DB_ID}}\"\n  },\n  \"properties\": {\n    \"Book Title\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-event-data').item.json.bookName}}\"\n          }\n        }\n      ]\n    },\n    \"Author\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-event-data').item.json.bookAuthor}}\"\n          }\n        }\n      ]\n    },\n    \"Language\": {\n      \"select\": {\n        \"name\": \"{{$('parse-event-data').item.json.language}}\"\n      }\n    },\n    \"Search Count\": {\n      \"number\": 1\n    },\n    \"Last Searched\": {\n      \"date\": {\n        \"start\": \"{{$('parse-event-data').item.json.timestamp}}\"\n      }\n    },\n    \"Status\": {\n      \"select\": {\n        \"name\": \"available\"\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-new-book",
+      "name": "Create New Book",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{$json.results[0].id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"Search Count\": {\n      \"number\": {{$json.results[0].properties['Search Count'].number + 1}}\n    },\n    \"Last Searched\": {\n      \"date\": {\n        \"start\": \"{{$('parse-event-data').item.json.timestamp}}\"\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "update-existing-book",
+      "name": "Update Existing Book",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store user and book page IDs for relations\nconst userData = $('check-user-exists').item.json;\nconst bookData = $('check-book-exists').item.json;\nconst eventData = $('parse-event-data').item.json;\n\nconst userPageId = userData.results && userData.results.length > 0 \n  ? userData.results[0].id \n  : $('create-new-user').item.json.id;\n\nconst bookPageId = bookData.results && bookData.results.length > 0\n  ? bookData.results[0].id\n  : $('create-new-book').item.json.id;\n\nreturn {\n  json: {\n    ...eventData,\n    userPageId,\n    bookPageId\n  }\n};"
+      },
+      "id": "merge-page-ids",
+      "name": "Merge Page IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"{{$env.NOTION_ANALYTICS_DB_ID}}\"\n  },\n  \"properties\": {\n    \"Event ID\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.eventId}}\"\n          }\n        }\n      ]\n    },\n    \"Event Type\": {\n      \"select\": {\n        \"name\": \"{{$json.eventType}}\"\n      }\n    },\n    \"User ID\": {\n      \"number\": {{$json.userId}}\n    },\n    \"User Name\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.userName}}\"\n          }\n        }\n      ]\n    },\n    \"Book Name\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.bookName}}\"\n          }\n        }\n      ]\n    },\n    \"Search Query\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.searchQuery}}\"\n          }\n        }\n      ]\n    },\n    \"Success\": {\n      \"checkbox\": {{$json.success}}\n    },\n    \"Error Message\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.error}}\"\n          }\n        }\n      ]\n    },\n    \"Response Time\": {\n      \"number\": {{$json.responseTime}}\n    },\n    \"Timestamp\": {\n      \"date\": {\n        \"start\": \"{{$json.timestamp}}\"\n      }\n    },\n    \"Session ID\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.sessionId}}\"\n          }\n        }\n      ]\n    },\n    \"Workflow Used\": {\n      \"select\": {\n        \"name\": \"{{$json.workflowUsed}}\"\n      }\n    },\n    \"Links Count\": {\n      \"number\": {{$json.linksCount}}\n    },\n    \"Language\": {\n      \"select\": {\n        \"name\": \"{{$json.language}}\"\n      }\n    },\n    \"Chat Type\": {\n      \"select\": {\n        \"name\": \"{{$json.chatType}}\"\n      }\n    },\n    \"Related User\": {\n      \"relation\": [\n        {\n          \"id\": \"{{$json.userPageId}}\"\n        }\n      ]\n    },\n    \"Related Book\": {\n      \"relation\": [\n        {\n          \"id\": \"{{$json.bookPageId}}\"\n        }\n      ]\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-analytics-event",
+      "name": "Create Analytics Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"{{$env.NOTION_SEARCHES_DB_ID}}\"\n  },\n  \"properties\": {\n    \"Search Query\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.searchQuery}}\"\n          }\n        }\n      ]\n    },\n    \"User\": {\n      \"relation\": [\n        {\n          \"id\": \"{{$json.userPageId}}\"\n        }\n      ]\n    },\n    \"Book Found\": {\n      \"relation\": [\n        {\n          \"id\": \"{{$json.bookPageId}}\"\n        }\n      ]\n    },\n    \"Timestamp\": {\n      \"date\": {\n        \"start\": \"{{$json.timestamp}}\"\n      }\n    },\n    \"Success\": {\n      \"checkbox\": {{$json.success}}\n    },\n    \"Results Count\": {\n      \"number\": {{$json.linksCount}}\n    },\n    \"Response Time\": {\n      \"number\": {{$json.responseTime}}\n    },\n    \"Search Type\": {\n      \"select\": {\n        \"name\": \"title\"\n      }\n    },\n    \"Language\": {\n      \"select\": {\n        \"name\": \"{{$json.language}}\"\n      }\n    },\n    \"Session ID\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$json.sessionId}}\"\n          }\n        }\n      ]\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-search-history",
+      "name": "Create Search History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2250, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Event synced to Notion successfully\",\n  \"eventId\": \"{{$('merge-page-ids').item.json.eventId}}\",\n  \"userPageId\": \"{{$('merge-page-ids').item.json.userPageId}}\",\n  \"bookPageId\": \"{{$('merge-page-ids').item.json.bookPageId}}\",\n  \"analyticsEventId\": \"{{$json.id}}\",\n  \"timestamp\": \"{{new Date().toISOString()}}\"\n}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Error syncing to Notion\",\n  \"error\": \"{{$json.error}}\",\n  \"timestamp\": \"{{new Date().toISOString()}}\"\n}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2450, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Parse Event Data", "type": "main", "index": 0}]]
+    },
+    "Parse Event Data": {
+      "main": [[{"node": "Check User Exists", "type": "main", "index": 0}]]
+    },
+    "Check User Exists": {
+      "main": [[{"node": "User Exists?", "type": "main", "index": 0}]]
+    },
+    "User Exists?": {
+      "main": [
+        [{"node": "Create New User", "type": "main", "index": 0}],
+        [{"node": "Update Existing User", "type": "main", "index": 0}]
+      ]
+    },
+    "Create New User": {
+      "main": [[{"node": "Check Book Exists", "type": "main", "index": 0}]]
+    },
+    "Update Existing User": {
+      "main": [[{"node": "Check Book Exists", "type": "main", "index": 0}]]
+    },
+    "Check Book Exists": {
+      "main": [[{"node": "Book Exists?", "type": "main", "index": 0}]]
+    },
+    "Book Exists?": {
+      "main": [
+        [{"node": "Create New Book", "type": "main", "index": 0}],
+        [{"node": "Update Existing Book", "type": "main", "index": 0}]
+      ]
+    },
+    "Create New Book": {
+      "main": [[{"node": "Merge Page IDs", "type": "main", "index": 0}]]
+    },
+    "Update Existing Book": {
+      "main": [[{"node": "Merge Page IDs", "type": "main", "index": 0}]]
+    },
+    "Merge Page IDs": {
+      "main": [[{"node": "Create Analytics Event", "type": "main", "index": 0}]]
+    },
+    "Create Analytics Event": {
+      "main": [[{"node": "Create Search History", "type": "main", "index": 0}]]
+    },
+    "Create Search History": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-21T00:00:00.000Z",
+  "versionId": "1.0.0"
+}

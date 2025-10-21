@@ -1,0 +1,229 @@
+{
+  "name": "Notion Query - Analytics & Reports",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "notion-query-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse query request\nconst body = $input.item.json.body;\n\nconst queryRequest = {\n  queryType: body.queryType || 'stats', // stats, popular_books, user_activity, errors\n  timeRange: body.timeRange || '24h', // 24h, 7d, 30d, all\n  userId: body.userId || null,\n  limit: parseInt(body.limit) || 10,\n  filters: body.filters || {}\n};\n\n// Calculate date range\nconst now = new Date();\nlet startDate = new Date();\n\nswitch (queryRequest.timeRange) {\n  case '24h':\n    startDate.setHours(now.getHours() - 24);\n    break;\n  case '7d':\n    startDate.setDate(now.getDate() - 7);\n    break;\n  case '30d':\n    startDate.setDate(now.getDate() - 30);\n    break;\n  case 'all':\n  default:\n    startDate = new Date('2020-01-01');\n}\n\nqueryRequest.startDate = startDate.toISOString();\nqueryRequest.endDate = now.toISOString();\n\nreturn { json: queryRequest };"
+      },
+      "id": "parse-query-request",
+      "name": "Parse Query Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.queryType}}",
+              "operation": "equals",
+              "value2": "stats"
+            }
+          ]
+        }
+      },
+      "id": "route-by-query-type",
+      "name": "Route by Query Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_ANALYTICS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Timestamp\",\n    \"date\": {\n      \"after\": \"{{$('parse-query-request').item.json.startDate}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "query-analytics-events",
+      "name": "Query Analytics Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate comprehensive statistics\nconst events = $input.item.json.results || [];\nconst queryParams = $('parse-query-request').item.json;\n\n// Initialize counters\nconst stats = {\n  timeRange: queryParams.timeRange,\n  period: {\n    start: queryParams.startDate,\n    end: queryParams.endDate\n  },\n  overview: {\n    totalEvents: events.length,\n    uniqueUsers: new Set(),\n    uniqueBooks: new Set(),\n    totalSearches: 0,\n    totalDownloads: 0,\n    successfulEvents: 0,\n    failedEvents: 0\n  },\n  performance: {\n    avgResponseTime: 0,\n    minResponseTime: Infinity,\n    maxResponseTime: 0,\n    p95ResponseTime: 0,\n    p99ResponseTime: 0,\n    successRate: 0\n  },\n  breakdown: {\n    byEventType: {},\n    byLanguage: {},\n    byWorkflow: {},\n    byHour: {}\n  },\n  errors: []\n};\n\n// Process all events\nconst responseTimes = [];\n\nevents.forEach(event => {\n  const props = event.properties;\n  \n  // Count unique users and books\n  if (props['User ID']?.number) {\n    stats.overview.uniqueUsers.add(props['User ID'].number);\n  }\n  if (props['Book Name']?.rich_text?.[0]?.text?.content) {\n    stats.overview.uniqueBooks.add(props['Book Name'].rich_text[0].text.content);\n  }\n  \n  // Count by event type\n  const eventType = props['Event Type']?.select?.name || 'unknown';\n  stats.breakdown.byEventType[eventType] = (stats.breakdown.byEventType[eventType] || 0) + 1;\n  \n  if (eventType === 'search') stats.overview.totalSearches++;\n  if (eventType === 'download') stats.overview.totalDownloads++;\n  \n  // Success/failure tracking\n  if (props['Success']?.checkbox) {\n    stats.overview.successfulEvents++;\n  } else {\n    stats.overview.failedEvents++;\n    stats.errors.push({\n      eventId: props['Event ID']?.title?.[0]?.text?.content,\n      error: props['Error Message']?.rich_text?.[0]?.text?.content,\n      timestamp: props['Timestamp']?.date?.start\n    });\n  }\n  \n  // Response time tracking\n  const responseTime = props['Response Time']?.number || 0;\n  if (responseTime > 0) {\n    responseTimes.push(responseTime);\n    stats.performance.minResponseTime = Math.min(stats.performance.minResponseTime, responseTime);\n    stats.performance.maxResponseTime = Math.max(stats.performance.maxResponseTime, responseTime);\n  }\n  \n  // Language breakdown\n  const language = props['Language']?.select?.name || 'unknown';\n  stats.breakdown.byLanguage[language] = (stats.breakdown.byLanguage[language] || 0) + 1;\n  \n  // Workflow breakdown\n  const workflow = props['Workflow Used']?.select?.name || 'unknown';\n  stats.breakdown.byWorkflow[workflow] = (stats.breakdown.byWorkflow[workflow] || 0) + 1;\n  \n  // Hour breakdown\n  const timestamp = new Date(props['Timestamp']?.date?.start);\n  const hour = timestamp.getHours();\n  stats.breakdown.byHour[hour] = (stats.breakdown.byHour[hour] || 0) + 1;\n});\n\n// Calculate performance metrics\nif (responseTimes.length > 0) {\n  stats.performance.avgResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;\n  \n  // Calculate percentiles\n  responseTimes.sort((a, b) => a - b);\n  const p95Index = Math.floor(responseTimes.length * 0.95);\n  const p99Index = Math.floor(responseTimes.length * 0.99);\n  stats.performance.p95ResponseTime = responseTimes[p95Index] || 0;\n  stats.performance.p99ResponseTime = responseTimes[p99Index] || 0;\n}\n\nstats.performance.successRate = events.length > 0 \n  ? (stats.overview.successfulEvents / events.length * 100).toFixed(2)\n  : 0;\n\n// Convert sets to counts\nstats.overview.uniqueUsers = stats.overview.uniqueUsers.size;\nstats.overview.uniqueBooks = stats.overview.uniqueBooks.size;\n\n// Fix infinity value\nif (stats.performance.minResponseTime === Infinity) {\n  stats.performance.minResponseTime = 0;\n}\n\n// Top errors (limit to 10)\nstats.errors = stats.errors.slice(0, 10);\n\nreturn { json: stats };"
+      },
+      "id": "calculate-statistics",
+      "name": "Calculate Statistics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_BOOKS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sorts\": [\n    {\n      \"property\": \"Search Count\",\n      \"direction\": \"descending\"\n    }\n  ],\n  \"page_size\": {{$('parse-query-request').item.json.limit}}\n}",
+        "options": {}
+      },
+      "id": "query-popular-books",
+      "name": "Query Popular Books",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format popular books data\nconst results = $input.item.json.results || [];\n\nconst popularBooks = results.map((book, index) => {\n  const props = book.properties;\n  return {\n    rank: index + 1,\n    title: props['Book Title']?.title?.[0]?.text?.content || 'Unknown',\n    author: props['Author']?.rich_text?.[0]?.text?.content || 'Unknown',\n    searchCount: props['Search Count']?.number || 0,\n    downloadCount: props['Download Count']?.number || 0,\n    language: props['Language']?.select?.name || 'unknown',\n    lastSearched: props['Last Searched']?.date?.start || null,\n    rating: props['Rating']?.number || 0,\n    status: props['Status']?.select?.name || 'unknown',\n    pageId: book.id\n  };\n});\n\nreturn { json: { books: popularBooks, total: results.length } };"
+      },
+      "id": "format-popular-books",
+      "name": "Format Popular Books",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Last Seen\",\n    \"date\": {\n      \"after\": \"{{$('parse-query-request').item.json.startDate}}\"\n    }\n  },\n  \"sorts\": [\n    {\n      \"property\": \"Messages Sent\",\n      \"direction\": \"descending\"\n    }\n  ],\n  \"page_size\": {{$('parse-query-request').item.json.limit}}\n}",
+        "options": {}
+      },
+      "id": "query-user-activity",
+      "name": "Query User Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format user activity data\nconst results = $input.item.json.results || [];\n\nconst users = results.map((user, index) => {\n  const props = user.properties;\n  return {\n    rank: index + 1,\n    userId: props['User ID']?.title?.[0]?.text?.content || 'Unknown',\n    firstName: props['First Name']?.rich_text?.[0]?.text?.content || 'Unknown',\n    username: props['Username']?.rich_text?.[0]?.text?.content || '',\n    messagesSent: props['Messages Sent']?.number || 0,\n    totalSearches: props['Total Searches']?.number || 0,\n    totalDownloads: props['Total Downloads']?.number || 0,\n    firstSeen: props['First Seen']?.date?.start || null,\n    lastSeen: props['Last Seen']?.date?.start || null,\n    status: props['Status']?.select?.name || 'unknown',\n    language: props['Language']?.select?.name || 'unknown',\n    pageId: user.id\n  };\n});\n\nreturn { json: { users, total: results.length } };"
+      },
+      "id": "format-user-activity",
+      "name": "Format User Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_ANALYTICS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"and\": [\n      {\n        \"property\": \"Success\",\n        \"checkbox\": {\n          \"equals\": false\n        }\n      },\n      {\n        \"property\": \"Timestamp\",\n        \"date\": {\n          \"after\": \"{{$('parse-query-request').item.json.startDate}}\"\n        }\n      }\n    ]\n  },\n  \"sorts\": [\n    {\n      \"property\": \"Timestamp\",\n      \"direction\": \"descending\"\n    }\n  ],\n  \"page_size\": {{$('parse-query-request').item.json.limit}}\n}",
+        "options": {}
+      },
+      "id": "query-errors",
+      "name": "Query Errors",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format error data\nconst results = $input.item.json.results || [];\n\nconst errors = results.map((error, index) => {\n  const props = error.properties;\n  return {\n    rank: index + 1,\n    eventId: props['Event ID']?.title?.[0]?.text?.content || 'Unknown',\n    eventType: props['Event Type']?.select?.name || 'unknown',\n    userId: props['User ID']?.number || 0,\n    userName: props['User Name']?.rich_text?.[0]?.text?.content || 'Unknown',\n    bookName: props['Book Name']?.rich_text?.[0]?.text?.content || '',\n    errorMessage: props['Error Message']?.rich_text?.[0]?.text?.content || 'No error message',\n    timestamp: props['Timestamp']?.date?.start || null,\n    workflow: props['Workflow Used']?.select?.name || 'unknown',\n    pageId: error.id\n  };\n});\n\nreturn { json: { errors, total: results.length } };"
+      },
+      "id": "format-errors",
+      "name": "Format Errors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 800]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json, null, 2)}}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Error querying Notion\",\n  \"error\": \"{{$json.error}}\",\n  \"timestamp\": \"{{new Date().toISOString()}}\"\n}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 700]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Parse Query Request", "type": "main", "index": 0}]]
+    },
+    "Parse Query Request": {
+      "main": [[{"node": "Route by Query Type", "type": "main", "index": 0}]]
+    },
+    "Route by Query Type": {
+      "main": [
+        [{"node": "Query Analytics Events", "type": "main", "index": 0}],
+        [{"node": "Query Popular Books", "type": "main", "index": 0}],
+        [{"node": "Query User Activity", "type": "main", "index": 0}],
+        [{"node": "Query Errors", "type": "main", "index": 0}]
+      ]
+    },
+    "Query Analytics Events": {
+      "main": [[{"node": "Calculate Statistics", "type": "main", "index": 0}]]
+    },
+    "Calculate Statistics": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Query Popular Books": {
+      "main": [[{"node": "Format Popular Books", "type": "main", "index": 0}]]
+    },
+    "Format Popular Books": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Query User Activity": {
+      "main": [[{"node": "Format User Activity", "type": "main", "index": 0}]]
+    },
+    "Format User Activity": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Query Errors": {
+      "main": [[{"node": "Format Errors", "type": "main", "index": 0}]]
+    },
+    "Format Errors": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-21T00:00:00.000Z",
+  "versionId": "1.0.0"
+}
