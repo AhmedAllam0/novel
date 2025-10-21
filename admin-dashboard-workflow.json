@@ -1,0 +1,193 @@
+{
+  "name": "Admin Dashboard - Web Interface",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "admin",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger-get",
+      "name": "GET /admin",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "admin-dashboard-get"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "admin/action",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger-post",
+      "name": "POST /admin/action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "webhookId": "admin-dashboard-post"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate admin dashboard HTML\nconst html = `\n<!DOCTYPE html>\n<html lang=\"ar\" dir=\"rtl\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>لوحة التحكم - بوت الكتب</title>\n    <style>\n        * {\n            margin: 0;\n            padding: 0;\n            box-sizing: border-box;\n        }\n        \n        body {\n            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            min-height: 100vh;\n            padding: 20px;\n        }\n        \n        .container {\n            max-width: 1400px;\n            margin: 0 auto;\n        }\n        \n        .header {\n            background: white;\n            padding: 20px 30px;\n            border-radius: 15px;\n            box-shadow: 0 10px 30px rgba(0,0,0,0.1);\n            margin-bottom: 30px;\n            display: flex;\n            justify-content: space-between;\n            align-items: center;\n        }\n        \n        .header h1 {\n            color: #667eea;\n            font-size: 2em;\n        }\n        \n        .header .time {\n            color: #666;\n            font-size: 0.9em;\n        }\n        \n        .stats-grid {\n            display: grid;\n            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n            gap: 20px;\n            margin-bottom: 30px;\n        }\n        \n        .stat-card {\n            background: white;\n            padding: 25px;\n            border-radius: 15px;\n            box-shadow: 0 5px 20px rgba(0,0,0,0.1);\n            transition: transform 0.3s;\n        }\n        \n        .stat-card:hover {\n            transform: translateY(-5px);\n        }\n        \n        .stat-card .icon {\n            font-size: 3em;\n            margin-bottom: 10px;\n        }\n        \n        .stat-card .value {\n            font-size: 2.5em;\n            font-weight: bold;\n            color: #667eea;\n            margin: 10px 0;\n        }\n        \n        .stat-card .label {\n            color: #666;\n            font-size: 1.1em;\n        }\n        \n        .dashboard-grid {\n            display: grid;\n            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));\n            gap: 20px;\n        }\n        \n        .panel {\n            background: white;\n            padding: 25px;\n            border-radius: 15px;\n            box-shadow: 0 5px 20px rgba(0,0,0,0.1);\n        }\n        \n        .panel h2 {\n            color: #667eea;\n            margin-bottom: 20px;\n            padding-bottom: 10px;\n            border-bottom: 2px solid #f0f0f0;\n        }\n        \n        table {\n            width: 100%;\n            border-collapse: collapse;\n        }\n        \n        th, td {\n            padding: 12px;\n            text-align: right;\n            border-bottom: 1px solid #f0f0f0;\n        }\n        \n        th {\n            background: #f8f9fa;\n            font-weight: bold;\n            color: #667eea;\n        }\n        \n        tr:hover {\n            background: #f8f9fa;\n        }\n        \n        .btn {\n            padding: 10px 20px;\n            border: none;\n            border-radius: 8px;\n            cursor: pointer;\n            font-size: 1em;\n            transition: all 0.3s;\n            margin: 5px;\n        }\n        \n        .btn-primary {\n            background: #667eea;\n            color: white;\n        }\n        \n        .btn-primary:hover {\n            background: #5568d3;\n        }\n        \n        .btn-danger {\n            background: #e74c3c;\n            color: white;\n        }\n        \n        .btn-danger:hover {\n            background: #c0392b;\n        }\n        \n        .btn-success {\n            background: #27ae60;\n            color: white;\n        }\n        \n        .btn-success:hover {\n            background: #229954;\n        }\n        \n        .actions {\n            display: flex;\n            gap: 10px;\n            margin-top: 20px;\n            flex-wrap: wrap;\n        }\n        \n        .status-badge {\n            display: inline-block;\n            padding: 5px 12px;\n            border-radius: 20px;\n            font-size: 0.85em;\n            font-weight: bold;\n        }\n        \n        .status-active {\n            background: #d4edda;\n            color: #155724;\n        }\n        \n        .status-inactive {\n            background: #f8d7da;\n            color: #721c24;\n        }\n        \n        .chart-container {\n            margin: 20px 0;\n            padding: 20px;\n            background: #f8f9fa;\n            border-radius: 10px;\n        }\n        \n        .loading {\n            text-align: center;\n            padding: 40px;\n            color: #667eea;\n            font-size: 1.2em;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h1>📊 لوحة التحكم - بوت الكتب</h1>\n            <div class=\"time\" id=\"currentTime\"></div>\n        </div>\n        \n        <div class=\"stats-grid\">\n            <div class=\"stat-card\">\n                <div class=\"icon\">👥</div>\n                <div class=\"value\" id=\"totalUsers\">-</div>\n                <div class=\"label\">إجمالي المستخدمين</div>\n            </div>\n            <div class=\"stat-card\">\n                <div class=\"icon\">🔍</div>\n                <div class=\"value\" id=\"totalSearches\">-</div>\n                <div class=\"label\">عمليات البحث</div>\n            </div>\n            <div class=\"stat-card\">\n                <div class=\"icon\">📚</div>\n                <div class=\"value\" id=\"totalBooks\">-</div>\n                <div class=\"label\">الكتب المتاحة</div>\n            </div>\n            <div class=\"stat-card\">\n                <div class=\"icon\">✅</div>\n                <div class=\"value\" id=\"successRate\">-</div>\n                <div class=\"label\">معدل النجاح</div>\n            </div>\n        </div>\n        \n        <div class=\"dashboard-grid\">\n            <div class=\"panel\">\n                <h2>📈 أفضل الكتب</h2>\n                <table id=\"popularBooks\">\n                    <thead>\n                        <tr>\n                            <th>#</th>\n                            <th>اسم الكتاب</th>\n                            <th>المؤلف</th>\n                            <th>عمليات البحث</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        <tr><td colspan=\"4\" class=\"loading\">جاري التحميل...</td></tr>\n                    </tbody>\n                </table>\n            </div>\n            \n            <div class=\"panel\">\n                <h2>👥 أنشط المستخدمين</h2>\n                <table id=\"activeUsers\">\n                    <thead>\n                        <tr>\n                            <th>#</th>\n                            <th>الاسم</th>\n                            <th>عمليات البحث</th>\n                            <th>الحالة</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        <tr><td colspan=\"4\" class=\"loading\">جاري التحميل...</td></tr>\n                    </tbody>\n                </table>\n            </div>\n            \n            <div class=\"panel\">\n                <h2>⚠️ الأخطاء الأخيرة</h2>\n                <table id=\"recentErrors\">\n                    <thead>\n                        <tr>\n                            <th>المستخدم</th>\n                            <th>نوع الخطأ</th>\n                            <th>الوقت</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        <tr><td colspan=\"3\" class=\"loading\">جاري التحميل...</td></tr>\n                    </tbody>\n                </table>\n            </div>\n            \n            <div class=\"panel\">\n                <h2>🛠️ إجراءات سريعة</h2>\n                <div class=\"actions\">\n                    <button class=\"btn btn-primary\" onclick=\"refreshData()\">🔄 تحديث البيانات</button>\n                    <button class=\"btn btn-success\" onclick=\"exportData()\">📥 تصدير التقرير</button>\n                    <button class=\"btn btn-primary\" onclick=\"viewNotionDashboard()\">📊 لوحة Notion</button>\n                    <button class=\"btn btn-danger\" onclick=\"clearCache()\">🗑️ مسح الذاكرة المؤقتة</button>\n                </div>\n            </div>\n        </div>\n    </div>\n    \n    <script>\n        // Update current time\n        function updateTime() {\n            const now = new Date();\n            document.getElementById('currentTime').textContent = now.toLocaleString('ar-EG');\n        }\n        updateTime();\n        setInterval(updateTime, 1000);\n        \n        // Load statistics\n        async function loadStats() {\n            try {\n                const response = await fetch('/webhook/notion-query', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                    body: JSON.stringify({ queryType: 'stats', timeRange: '24h' })\n                });\n                const data = await response.json();\n                \n                document.getElementById('totalUsers').textContent = data.overview.uniqueUsers;\n                document.getElementById('totalSearches').textContent = data.overview.totalSearches;\n                document.getElementById('totalBooks').textContent = data.overview.uniqueBooks;\n                document.getElementById('successRate').textContent = data.performance.successRate + '%';\n            } catch (error) {\n                console.error('Error loading stats:', error);\n            }\n        }\n        \n        // Load popular books\n        async function loadPopularBooks() {\n            try {\n                const response = await fetch('/webhook/notion-query', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                    body: JSON.stringify({ queryType: 'popular_books', limit: 10 })\n                });\n                const data = await response.json();\n                \n                const tbody = document.querySelector('#popularBooks tbody');\n                tbody.innerHTML = '';\n                \n                data.books.forEach((book, index) => {\n                    const row = tbody.insertRow();\n                    row.innerHTML = `\n                        <td>${index + 1}</td>\n                        <td>${book.title}</td>\n                        <td>${book.author}</td>\n                        <td>${book.searchCount}</td>\n                    `;\n                });\n            } catch (error) {\n                console.error('Error loading books:', error);\n            }\n        }\n        \n        // Load active users\n        async function loadActiveUsers() {\n            try {\n                const response = await fetch('/webhook/notion-query', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                    body: JSON.stringify({ queryType: 'user_activity', limit: 10 })\n                });\n                const data = await response.json();\n                \n                const tbody = document.querySelector('#activeUsers tbody');\n                tbody.innerHTML = '';\n                \n                data.users.forEach((user, index) => {\n                    const row = tbody.insertRow();\n                    row.innerHTML = `\n                        <td>${index + 1}</td>\n                        <td>${user.firstName}</td>\n                        <td>${user.totalSearches}</td>\n                        <td><span class=\"status-badge status-${user.status}\">${user.status}</span></td>\n                    `;\n                });\n            } catch (error) {\n                console.error('Error loading users:', error);\n            }\n        }\n        \n        // Load recent errors\n        async function loadRecentErrors() {\n            try {\n                const response = await fetch('/webhook/notion-query', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                    body: JSON.stringify({ queryType: 'errors', limit: 10 })\n                });\n                const data = await response.json();\n                \n                const tbody = document.querySelector('#recentErrors tbody');\n                tbody.innerHTML = '';\n                \n                if (data.errors.length === 0) {\n                    const row = tbody.insertRow();\n                    row.innerHTML = '<td colspan=\"3\" style=\"text-align:center\">✅ لا توجد أخطاء</td>';\n                } else {\n                    data.errors.forEach(error => {\n                        const row = tbody.insertRow();\n                        const time = new Date(error.timestamp).toLocaleString('ar-EG');\n                        row.innerHTML = `\n                            <td>${error.userName}</td>\n                            <td>${error.errorMessage.substring(0, 50)}...</td>\n                            <td>${time}</td>\n                        `;\n                    });\n                }\n            } catch (error) {\n                console.error('Error loading errors:', error);\n            }\n        }\n        \n        // Action functions\n        function refreshData() {\n            loadStats();\n            loadPopularBooks();\n            loadActiveUsers();\n            loadRecentErrors();\n            alert('✅ تم تحديث البيانات');\n        }\n        \n        function exportData() {\n            alert('📥 سيتم تصدير التقرير قريباً...');\n        }\n        \n        function viewNotionDashboard() {\n            window.open('https://notion.so/your-dashboard', '_blank');\n        }\n        \n        function clearCache() {\n            if (confirm('هل أنت متأكد من مسح الذاكرة المؤقتة?')) {\n                alert('🗑️ تم مسح الذاكرة المؤقتة');\n            }\n        }\n        \n        // Initial load\n        loadStats();\n        loadPopularBooks();\n        loadActiveUsers();\n        loadRecentErrors();\n        \n        // Auto-refresh every 30 seconds\n        setInterval(refreshData, 30000);\n    </script>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    html,\n    contentType: 'text/html'\n  }\n};"
+      },
+      "id": "generate-dashboard-html",
+      "name": "Generate Dashboard HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.html}}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-with-html",
+      "name": "Respond with HTML",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse admin action\nconst body = $input.item.json.body;\n\nconst action = {\n  type: body.type || 'unknown', // block_user, delete_book, clear_cache, export_report\n  params: body.params || {},\n  adminId: body.adminId || 'unknown'\n};\n\nreturn { json: action };"
+      },
+      "id": "parse-admin-action",
+      "name": "Parse Admin Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.type}}",
+              "operation": "equals",
+              "value2": "block_user"
+            }
+          ]
+        }
+      },
+      "id": "route-admin-action",
+      "name": "Route Admin Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [650, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"User ID\",\n    \"title\": {\n      \"equals\": \"{{$('parse-admin-action').item.json.params.userId}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "find-user-to-block",
+      "name": "Find User to Block",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{$json.results[0].id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"Status\": {\n      \"select\": {\n        \"name\": \"blocked\"\n      }\n    },\n    \"Notes\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"Blocked by admin {{$('parse-admin-action').item.json.adminId}} at {{new Date().toISOString()}}\"\n          }\n        }\n      ]\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "block-user",
+      "name": "Block User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    success: true,\n    message: 'User blocked successfully',\n    action: $('parse-admin-action').item.json.type,\n    userId: $('parse-admin-action').item.json.params.userId,\n    adminId: $('parse-admin-action').item.json.adminId,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-action-response",
+      "name": "Format Action Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json, null, 2)}}",
+        "options": {}
+      },
+      "id": "respond-action-success",
+      "name": "Respond Action Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 500]
+    }
+  ],
+  "connections": {
+    "GET /admin": {
+      "main": [[{"node": "Generate Dashboard HTML", "type": "main", "index": 0}]]
+    },
+    "Generate Dashboard HTML": {
+      "main": [[{"node": "Respond with HTML", "type": "main", "index": 0}]]
+    },
+    "POST /admin/action": {
+      "main": [[{"node": "Parse Admin Action", "type": "main", "index": 0}]]
+    },
+    "Parse Admin Action": {
+      "main": [[{"node": "Route Admin Action", "type": "main", "index": 0}]]
+    },
+    "Route Admin Action": {
+      "main": [
+        [{"node": "Find User to Block", "type": "main", "index": 0}]
+      ]
+    },
+    "Find User to Block": {
+      "main": [[{"node": "Block User", "type": "main", "index": 0}]]
+    },
+    "Block User": {
+      "main": [[{"node": "Format Action Response", "type": "main", "index": 0}]]
+    },
+    "Format Action Response": {
+      "main": [[{"node": "Respond Action Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2025-10-21T00:00:00.000Z",
+  "versionId": "1.0.0"
+}

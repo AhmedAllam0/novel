@@ -1,0 +1,280 @@
+{
+  "name": "Social Features - Reviews, Ratings & Sharing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "social-features",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "social-features-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse social action request\nconst body = $input.item.json.body;\n\nconst request = {\n  action: body.action || 'add_review', // add_review, rate_book, share_book, get_reviews, get_leaderboard\n  userId: body.userId,\n  bookTitle: body.bookTitle || '',\n  data: body.data || {}\n};\n\nif (!request.userId) {\n  throw new Error('userId is required');\n}\n\nreturn { json: request };"
+      },
+      "id": "parse-request",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "operation": "equals",
+              "value2": "add_review"
+            }
+          ]
+        }
+      },
+      "id": "route-by-action",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_BOOKS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Book Title\",\n    \"title\": {\n      \"equals\": \"{{$('parse-request').item.json.bookTitle}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "find-book",
+      "name": "Find Book",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"parent\": {\n    \"database_id\": \"{{$env.NOTION_REVIEWS_DB_ID}}\"\n  },\n  \"properties\": {\n    \"Review ID\": {\n      \"title\": [\n        {\n          \"text\": {\n            \"content\": \"rev_{{Date.now()}}_{{Math.random().toString(36).substr(2, 9)}}\"\n          }\n        }\n      ]\n    },\n    \"User ID\": {\n      \"number\": {{$('parse-request').item.json.userId}}\n    },\n    \"Book\": {\n      \"relation\": [\n        {\n          \"id\": \"{{$json.results[0].id}}\"\n        }\n      ]\n    },\n    \"Review Text\": {\n      \"rich_text\": [\n        {\n          \"text\": {\n            \"content\": \"{{$('parse-request').item.json.data.reviewText}}\"\n          }\n        }\n      ]\n    },\n    \"Rating\": {\n      \"number\": {{$('parse-request').item.json.data.rating || 0}}\n    },\n    \"Timestamp\": {\n      \"date\": {\n        \"start\": \"{{new Date().toISOString()}}\"\n      }\n    },\n    \"Language\": {\n      \"select\": {\n        \"name\": \"{{$('parse-request').item.json.data.language || 'ar'}}\"\n      }\n    },\n    \"Status\": {\n      \"select\": {\n        \"name\": \"published\"\n      }\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "create-review",
+      "name": "Create Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update book's average rating\nconst bookId = $('find-book').item.json.results[0].id;\nconst bookProps = $('find-book').item.json.results[0].properties;\nconst currentRating = bookProps['Rating']?.number || 0;\nconst newRating = $('parse-request').item.json.data.rating || 0;\n\n// Simple average (in production, query all reviews for accurate average)\nconst averageRating = currentRating > 0 ? (currentRating + newRating) / 2 : newRating;\n\nreturn {\n  json: {\n    bookId,\n    averageRating: Math.round(averageRating * 10) / 10\n  }\n};"
+      },
+      "id": "calculate-avg-rating",
+      "name": "Calculate Avg Rating",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 100]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{$json.bookId}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"properties\": {\n    \"Rating\": {\n      \"number\": {{$json.averageRating}}\n    }\n  }\n}",
+        "options": {}
+      },
+      "id": "update-book-rating",
+      "name": "Update Book Rating",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    success: true,\n    message: 'Review added successfully',\n    reviewId: $('create-review').item.json.id,\n    bookTitle: $('parse-request').item.json.bookTitle,\n    rating: $('parse-request').item.json.data.rating,\n    averageRating: $json.properties['Rating'].number,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-review-response",
+      "name": "Format Review Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_REVIEWS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Book\",\n    \"relation\": {\n      \"contains\": \"{{$('find-book').item.json.results[0].id}}\"\n    }\n  },\n  \"sorts\": [\n    {\n      \"property\": \"Timestamp\",\n      \"direction\": \"descending\"\n    }\n  ],\n  \"page_size\": {{$('parse-request').item.json.data.limit || 10}}\n}",
+        "options": {}
+      },
+      "id": "get-book-reviews",
+      "name": "Get Book Reviews",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format reviews\nconst results = $input.item.json.results || [];\n\nconst reviews = results.map((review, index) => {\n  const props = review.properties;\n  return {\n    rank: index + 1,\n    reviewId: props['Review ID']?.title?.[0]?.text?.content || '',\n    userId: props['User ID']?.number || 0,\n    reviewText: props['Review Text']?.rich_text?.[0]?.text?.content || '',\n    rating: props['Rating']?.number || 0,\n    timestamp: props['Timestamp']?.date?.start || null,\n    language: props['Language']?.select?.name || 'ar',\n    status: props['Status']?.select?.name || 'published'\n  };\n});\n\nreturn {\n  json: {\n    success: true,\n    bookTitle: $('parse-request').item.json.bookTitle,\n    reviews,\n    total: results.length\n  }\n};"
+      },
+      "id": "format-reviews-list",
+      "name": "Format Reviews List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/={{$env.NOTION_USERS_DB_ID}}/query",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filter\": {\n    \"property\": \"Status\",\n    \"select\": {\n      \"equals\": \"active\"\n    }\n  },\n  \"sorts\": [\n    {\n      \"property\": \"Total Searches\",\n      \"direction\": \"descending\"\n    }\n  ],\n  \"page_size\": {{$('parse-request').item.json.data.limit || 10}}\n}",
+        "options": {}
+      },
+      "id": "get-leaderboard",
+      "name": "Get Leaderboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format leaderboard\nconst results = $input.item.json.results || [];\n\nconst leaderboard = results.map((user, index) => {\n  const props = user.properties;\n  return {\n    rank: index + 1,\n    userId: props['User ID']?.title?.[0]?.text?.content || '',\n    firstName: props['First Name']?.rich_text?.[0]?.text?.content || 'Unknown',\n    username: props['Username']?.rich_text?.[0]?.text?.content || '',\n    totalSearches: props['Total Searches']?.number || 0,\n    totalDownloads: props['Total Downloads']?.number || 0,\n    messagesSent: props['Messages Sent']?.number || 0,\n    successRate: props['Success Rate']?.number || 0,\n    favoriteGenre: props['Favorite Genre']?.text || ''\n  };\n});\n\nreturn {\n  json: {\n    success: true,\n    leaderboard,\n    total: results.length,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-leaderboard",
+      "name": "Format Leaderboard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate share message\nconst request = $('parse-request').item.json;\n\nconst shareMessage = {\n  success: true,\n  shareText: `📚 اكتشفت كتاب رائع على بوت الكتب!\\n\\n\"${request.bookTitle}\"\\n\\n💬 شاركني رأيك في الكتاب\\n👉 جربه الآن: @YourBookBot`,\n  shareUrl: `https://t.me/YourBookBot?start=book_${encodeURIComponent(request.bookTitle)}`,\n  bookTitle: request.bookTitle,\n  userId: request.userId,\n  timestamp: new Date().toISOString()\n};\n\nreturn { json: shareMessage };"
+      },
+      "id": "generate-share-link",
+      "name": "Generate Share Link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify($json, null, 2)}}",
+        "options": {}
+      },
+      "id": "response-success",
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"message\": \"Error processing social action\",\n  \"error\": \"{{$json.error}}\",\n  \"timestamp\": \"{{new Date().toISOString()}}\"\n}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "response-error",
+      "name": "Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Parse Request", "type": "main", "index": 0}]]
+    },
+    "Parse Request": {
+      "main": [[{"node": "Route by Action", "type": "main", "index": 0}]]
+    },
+    "Route by Action": {
+      "main": [
+        [{"node": "Find Book", "type": "main", "index": 0}],
+        [{"node": "Get Book Reviews", "type": "main", "index": 0}],
+        [{"node": "Get Leaderboard", "type": "main", "index": 0}],
+        [{"node": "Generate Share Link", "type": "main", "index": 0}]
+      ]
+    },
+    "Find Book": {
+      "main": [[{"node": "Create Review", "type": "main", "index": 0}]]
+    },
+    "Create Review": {
+      "main": [[{"node": "Calculate Avg Rating", "type": "main", "index": 0}]]
+    },
+    "Calculate Avg Rating": {
+      "main": [[{"node": "Update Book Rating", "type": "main", "index": 0}]]
+    },
+    "Update Book Rating": {
+      "main": [[{"node": "Format Review Response", "type": "main", "index": 0}]]
+    },
+    "Format Review Response": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Get Book Reviews": {
+      "main": [[{"node": "Format Reviews List", "type": "main", "index": 0}]]
+    },
+    "Format Reviews List": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Get Leaderboard": {
+      "main": [[{"node": "Format Leaderboard", "type": "main", "index": 0}]]
+    },
+    "Format Leaderboard": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    },
+    "Generate Share Link": {
+      "main": [[{"node": "Response Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-21T00:00:00.000Z",
+  "versionId": "1.0.0"
+}
