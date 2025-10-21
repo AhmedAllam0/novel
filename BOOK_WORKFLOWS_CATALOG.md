@@ -16,18 +16,22 @@ Complete collection of book-related n8n workflows for the Telegram Book Bot ecos
 
 ## Overview
 
-This catalog contains **6 specialized workflows** that extend the functionality of the main Telegram Book Bot. Each workflow focuses on a specific book-related feature and can be used independently or integrated with the main bot.
+This catalog contains **8 specialized workflows** that extend the functionality of the main Telegram Book Bot. Each workflow focuses on a specific feature and can be used independently or integrated with the main bot.
 
 ### Main Workflow
 - **telegram-book-bot-workflow.json** - The primary bot for finding book download links
 
-### Extended Workflows
+### Book Feature Workflows
 1. **book-recommendations-workflow.json** - AI-powered book recommendations
 2. **book-metadata-extractor-workflow.json** - Extract detailed book information
 3. **reading-list-manager-workflow.json** - Manage personal reading lists
 4. **book-reviews-summarizer-workflow.json** - Summarize book reviews
 5. **book-quotes-extractor-workflow.json** - Extract memorable quotes
 6. **author-profile-workflow.json** - Get author information and works
+
+### Monitoring & Analytics Workflows 🆕
+7. **analytics-dashboard-workflow.json** - Comprehensive analytics and monitoring
+8. **rate-limiter-workflow.json** - Rate limiting and abuse prevention
 
 ---
 
@@ -41,6 +45,8 @@ This catalog contains **6 specialized workflows** that extend the functionality 
 | ⭐ Reviews Summarizer | Analyze and summarize book reviews | Book name, reviews text | Summary with pros/cons | ✅ Ready |
 | 💭 Quotes Extractor | Extract memorable quotes from books | Book name, count, theme | List of quotes with context | ✅ Ready |
 | ✍️ Author Profile | Get author biography and works | Author name | Complete author profile | ✅ Ready |
+| 📊 Analytics Dashboard 🆕 | Track usage, performance, and generate reports | Action (log/stats/report), event data | Statistics, reports, insights | ✅ Ready |
+| 🛡️ Rate Limiter 🆕 | Prevent abuse with rate limiting | User ID, action | Allow/block with limits | ✅ Ready |
 
 ---
 
@@ -63,6 +69,8 @@ This catalog contains **6 specialized workflows** that extend the functionality 
    book-reviews-summarizer-workflow.json
    book-quotes-extractor-workflow.json
    author-profile-workflow.json
+   analytics-dashboard-workflow.json 🆕
+   rate-limiter-workflow.json 🆕
    ```
 
 ### Step 2: Configure Credentials
@@ -806,6 +814,32 @@ else if (userMessage.includes('المؤلف') || userMessage.includes('كاتب'
 
 ---
 
+## 🆕 New Analytics & Monitoring Features
+
+For detailed documentation on the new analytics and monitoring capabilities:
+
+- **[ANALYTICS_AND_MONITORING.md](ANALYTICS_AND_MONITORING.md)** - Complete guide to analytics system
+- **[ANALYTICS_INTEGRATION_EXAMPLES.md](ANALYTICS_INTEGRATION_EXAMPLES.md)** - Integration examples and patterns
+
+### Analytics Dashboard Features
+- Real-time user statistics
+- Popular books and genres tracking
+- Performance metrics (response times, P95, P99)
+- Error tracking and monitoring
+- User engagement metrics
+- Automated reports (daily/weekly/monthly)
+- Multi-language analytics
+
+### Rate Limiter Features
+- Per-minute limits (10 req/min)
+- Per-hour limits (100 req/hour)
+- Per-day limits (500 req/day)
+- Burst protection
+- Graceful Arabic error messages
+- Retry-after headers
+
+---
+
 ## Support & Contributions
 
 ### Getting Help
@@ -813,6 +847,7 @@ else if (userMessage.includes('المؤلف') || userMessage.includes('كاتب'
 - Check the main [README.md](README.md) for general information
 - Review [WORKFLOW_NODES.md](WORKFLOW_NODES.md) for technical details
 - See [EXAMPLES.md](EXAMPLES.md) for more examples
+- Read [ANALYTICS_AND_MONITORING.md](ANALYTICS_AND_MONITORING.md) for analytics 🆕
 
 ### Contributing
 
@@ -824,6 +859,6 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
-**Last Updated**: 2025-10-20  
-**Version**: 1.0.0  
-**Total Workflows**: 7 (1 main + 6 extended)
+**Last Updated**: 2025-10-21  
+**Version**: 2.0.0  
+**Total Workflows**: 9 (1 main + 6 book features + 2 monitoring)
